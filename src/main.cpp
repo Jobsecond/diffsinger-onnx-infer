@@ -144,6 +144,7 @@ namespace diffsinger {
                 f0Timestep = segment["f0_timestep"].GetDouble();
             }
 
+            double offset = segment.HasMember("offset") ? segment["offset"].GetDouble() : 0.0;
             dsFile.close();
 
             auto dsConfig = loadDsConfig(dsConfigPath);
@@ -169,7 +170,7 @@ namespace diffsinger {
 
             // TODO: mel will be `std::move`d in the next step, so it will not be usable after that.
             std::cout << "Waveform" << "\n";
-            auto waveform = diffsinger::vocoderInfer(vocoderConfig.model, mel, pd.f0Seq);
+            auto waveform = diffsinger::vocoderInfer(vocoderConfig.model, mel, pd.f0);
 
             std::basic_stringstream<TChar> ss;
             ss << outputWavePath << DS_T("_") << i << DS_T(".wav");

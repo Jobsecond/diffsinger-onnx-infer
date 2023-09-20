@@ -47,11 +47,11 @@ namespace diffsinger {
         PreprocessedData pd{};
 
         pd.tokens = phonemesToTokens(name2token, phonemes);
-        pd.phDur = phonemeDurationToFrames(durations, frameLength);
+        pd.durations = phonemeDurationToFrames(durations, frameLength);
 
-        int64_t targetLength = std::accumulate(pd.phDur.begin(), pd.phDur.end(), static_cast<int64_t>(0));
+        int64_t targetLength = std::accumulate(pd.durations.begin(), pd.durations.end(), static_cast<int64_t>(0));
 
-        pd.f0Seq = curveTransform(f0, f0Timestep, frameLength, targetLength);
+        pd.f0 = curveTransform(f0, f0Timestep, frameLength, targetLength);
         return pd;
     }
 
