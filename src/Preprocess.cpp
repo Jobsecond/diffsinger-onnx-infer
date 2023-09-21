@@ -38,24 +38,31 @@ namespace diffsinger {
 
     PreprocessedData acousticPreprocess(
             const std::unordered_map<std::string, int64_t> &name2token,
-            const std::vector<std::string> &phonemes,
-            const std::vector<double> &durations,
-            const std::vector<double> &f0,
-            double frameLength,
-            double f0Timestep) {
+            const DsSegment &dsSegment,
+            double frameLength) {
 
         PreprocessedData pd{};
 
-        pd.tokens = phonemesToTokens(name2token, phonemes);
-        pd.durations = phonemeDurationToFrames(durations, frameLength);
+        pd.tokens = phonemesToTokens(name2token, dsSegment.ph_seq);
+        pd.durations = phonemeDurationToFrames(dsSegment.ph_dur, frameLength);
 
         int64_t targetLength = std::accumulate(pd.durations.begin(), pd.durations.end(), static_cast<int64_t>(0));
 
-        pd.f0 = curveTransform(f0, f0Timestep, frameLength, targetLength);
+        pd.f0 = curveTransform(dsSegment.f0.samples, dsSegment.f0.timestep, frameLength, targetLength);
+        pd.velocity = curveTransform(dsSegment.velocity.samples, dsSegment.velocity.timestep, frameLength, targetLength);
+        pd.gender = curveTransform(dsSegment.gender.samples, dsSegment.gender.timestep, frameLength, targetLength);
+        pd.energy = curveTransform(dsSegment.energy.samples, dsSegment.energy.timestep, frameLength, targetLength);
+        pd.breathiness = curveTransform(dsSegment.breathiness.samples, dsSegment.breathiness.timestep, frameLength, targetLength);
+
+        // TODO: spk_mix
+
         return pd;
     }
 
     std::vector<double> curveTransform(const std::vector<double> &inputSamples, double inputTimestep, double targetTimestep, int64_t targetLength) {
+        if (inputSamples.empty() || inputTimestep == 0 || targetTimestep == 0 || targetLength == 0) {
+            return {};
+        }
         // Find the time duration of input samples in seconds.
         auto tMax = static_cast<double>(inputSamples.size() - 1) * inputTimestep;
 

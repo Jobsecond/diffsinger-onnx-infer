@@ -18,11 +18,8 @@ namespace diffsinger {
 
     PreprocessedData acousticPreprocess(
             const std::unordered_map<std::string, int64_t> &name2token,
-            const std::vector<std::string> &phonemes,
-            const std::vector<double> &durations,
-            const std::vector<double> &f0,
-            double frameLength,
-            double f0Timestep);
+            const DsSegment &dsSegment,
+            double frameLength);
 
 }
 #endif //DS_ONNX_INFER_PREPROCESS_H

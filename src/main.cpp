@@ -28,6 +28,8 @@ namespace diffsinger {
              const TString &vocoderConfigPath,
              const TString &outputWavePath,
              int acousticSpeedup = 10);
+
+    std::vector<DsSegment> loadDsProject(const TString &dsFilePath);
 }
 
 using diffsinger::MBStringToWString;
@@ -85,85 +87,32 @@ namespace diffsinger {
 
         // Print the available providers
         std::cout << "Available Providers:" << std::endl;
-        for (const auto& provider : availableProviders) {
+        for (const auto &provider: availableProviders) {
             std::cout << provider << std::endl;
         }
 
-        std::ifstream dsFile(dsFilePath);
+        auto dsProject = loadDsProject(dsFilePath);
 
-        if (!dsFile.is_open()) {
-            std::cout << "Failed to open file!\n";
+        auto dsConfig = loadDsConfig(dsConfigPath);
+        std::unordered_map<std::string, int64_t> name2token;
+        std::string line;
+        std::ifstream phonemesFile(dsConfig.phonemes);
+
+        int64_t token = 0;
+        while (std::getline(phonemesFile, line)) {
+            name2token.emplace(line, token);
+            ++token;
         }
+        phonemesFile.close();
 
-        rapidjson::IStreamWrapper streamWrapper(dsFile);
-        rapidjson::Document data;
-        data.ParseStream(streamWrapper);
-
-        if (!data.IsArray()) {
-            std::cout << "Invalid ds file format!\n";
-            return;
-        }
-        auto numSegments = data.Size();
-        for (rapidjson::SizeType i = 0; i < numSegments; i++) {
+        auto vocoderConfig = loadDsVocoderConfig(vocoderConfigPath);
+        int sampleRate = vocoderConfig.sampleRate;
+        int hopSize = vocoderConfig.hopSize;
+        double frameLength = 1.0 * hopSize / sampleRate;
+        size_t numSegments = dsProject.size();
+        for (size_t i = 0; i <= numSegments; i++) {
             std::cout << i << " of " << numSegments << "\n";
-            const auto &segment = data[i];
-            if (!segment.IsObject()) {
-                std::cout << "Segment at index " << i << " is not an object!\n";
-                continue;
-            }
-
-            if (!segment.HasMember("ph_seq")
-                || !segment.HasMember("ph_dur")
-                || !segment.HasMember("f0_seq")
-                || !segment.HasMember("f0_timestep")) {
-                std::cout << "Segment at index " << i << " must contain required keys (ph_seq, ph_dur, f0_seq, f0_timestep)!\n";
-                continue;
-            }
-            if (!segment["ph_seq"].IsString()
-                || !segment["ph_dur"].IsString()
-                || !segment["f0_seq"].IsString()
-                || !(segment["f0_timestep"].IsNumber() || segment["f0_timestep"].IsString())) {
-                std::cout << "Segment at index " << i << " must contain valid keys (ph_seq, ph_dur, f0_seq, f0_timestep)!\n";
-                continue;
-            }
-
-            std::string phSeq0 = segment["ph_seq"].GetString();
-            auto phSeq = splitString<std::string>(phSeq0);
-
-            std::string phDur0 = segment["ph_dur"].GetString();
-            auto phDur = splitString<double>(phDur0);
-
-            std::string f0Seq0 = segment["f0_seq"].GetString();
-            auto f0Seq = splitString<double>(f0Seq0);
-
-            double f0Timestep = 0.0;
-            if (segment["f0_timestep"].IsString()) {
-                std::string f0Timestep0 = segment["f0_timestep"].GetString();
-                f0Timestep = std::stod(f0Timestep0);
-            } else if (segment["f0_timestep"].IsNumber()) {
-                f0Timestep = segment["f0_timestep"].GetDouble();
-            }
-
-            double offset = segment.HasMember("offset") ? segment["offset"].GetDouble() : 0.0;
-            dsFile.close();
-
-            auto dsConfig = loadDsConfig(dsConfigPath);
-            std::unordered_map<std::string, int64_t> name2token;
-            std::string line;
-            std::ifstream phonemesFile(dsConfig.phonemes);
-
-            int64_t token = 0;
-            while (std::getline(phonemesFile, line)) {
-                name2token.emplace(line, token);
-                ++token;
-            }
-            phonemesFile.close();
-
-            auto vocoderConfig = loadDsVocoderConfig(vocoderConfigPath);
-            int sampleRate = vocoderConfig.sampleRate;
-            int hopSize = vocoderConfig.hopSize;
-            double frameLength = 1.0 * hopSize / sampleRate;
-            auto pd = diffsinger::acousticPreprocess(name2token, phSeq, phDur, f0Seq, frameLength, f0Timestep);
+            auto pd = diffsinger::acousticPreprocess(name2token, dsProject[i], frameLength);
 
             std::cout << "Mel" << "\n";
             auto mel = diffsinger::acousticInfer(dsConfig.acoustic, pd, acousticSpeedup);
@@ -180,5 +129,98 @@ namespace diffsinger {
         }
     }
 
+    std::vector<DsSegment> loadDsProject(const TString &dsFilePath) {
+        std::ifstream dsFile(dsFilePath);
 
+        if (!dsFile.is_open()) {
+            std::cout << "Failed to open file!\n";
+            return {};
+        }
+
+        rapidjson::IStreamWrapper streamWrapper(dsFile);
+        rapidjson::Document data;
+        data.ParseStream(streamWrapper);
+
+        if (!data.IsArray()) {
+            std::cout << "Invalid ds file format!\n";
+            dsFile.close();
+            return {};
+        }
+
+        std::vector<DsSegment> result;
+
+        auto numSegments = data.Size();
+        for (rapidjson::SizeType i = 0; i < numSegments; i++) {
+            DsSegment dsSegment{};
+            const auto &segment = data[i];
+            if (!segment.IsObject()) {
+                std::cout << "Segment at index " << i << " is not an object!\n";
+                continue;
+            }
+
+            // TODO: ph_dur and f0 curve can be inferred using rhythmizers and autopitch models.
+            //       In this case, these parameters can be omitted from .ds files, but note sequences
+            //       must be supplied.
+            if (!segment.HasMember("ph_seq")
+                || !segment.HasMember("ph_dur")
+                || !segment.HasMember("f0_seq")
+                || !segment.HasMember("f0_timestep")) {
+                std::cout << "Segment at index " << i
+                          << " must contain required keys (ph_seq, ph_dur, f0_seq, f0_timestep)!\n";
+                continue;
+            }
+            if (!segment["ph_seq"].IsString()
+                || !segment["ph_dur"].IsString()
+                || !segment["f0_seq"].IsString()
+                || !(segment["f0_timestep"].IsNumber() || segment["f0_timestep"].IsString())) {
+                std::cout << "Segment at index " << i
+                          << " must contain valid keys (ph_seq, ph_dur, f0_seq, f0_timestep)!\n";
+                continue;
+            }
+
+            dsSegment.ph_seq = splitString<std::string>(segment["ph_seq"].GetString());
+            dsSegment.ph_dur = splitString<double>(segment["ph_dur"].GetString());
+
+            auto loadSampleCurve = [&segment](
+                    const char *sampleKey, const char *timestepKey,
+                    SampleCurve *sampleCurve) {
+                if (!sampleCurve) {
+                    return;
+                }
+                if (!segment.HasMember(sampleKey) || !segment.HasMember(timestepKey)) {
+                    return;
+                }
+                if (!segment[sampleKey].IsString()) {
+                    return;
+                }
+                bool timestepIsString = segment[timestepKey].IsString();
+                bool timestepIsNumber = segment[timestepKey].IsNumber();
+                if (!timestepIsString && !timestepIsNumber) {
+                    return;
+                }
+
+                sampleCurve->samples = splitString<double>(segment[sampleKey].GetString());
+
+                if (timestepIsString) {
+                    sampleCurve->timestep = std::stod(segment[timestepKey].GetString());
+                } else {
+                    sampleCurve->timestep = segment[timestepKey].GetDouble();
+                }
+            };
+
+            loadSampleCurve("f0_seq", "f0_timestep", &dsSegment.f0);
+            loadSampleCurve("gender", "gender_timestep", &dsSegment.gender);
+            loadSampleCurve("velocity", "velocity_timestep", &dsSegment.velocity);
+            loadSampleCurve("energy", "energy_timestep", &dsSegment.energy);
+            loadSampleCurve("breathiness", "breathiness_timestep", &dsSegment.breathiness);
+
+            // TODO: spk_mix
+
+            dsSegment.offset = segment.HasMember("offset") ? segment["offset"].GetDouble() : 0.0;
+            dsFile.close();
+
+            result.push_back(dsSegment);
+        }
+        return result;
+    }
 }

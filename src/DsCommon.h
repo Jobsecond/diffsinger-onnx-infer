@@ -26,6 +26,28 @@ namespace diffsinger {
         std::vector<double> breathiness;
     };
 
+    struct SampleCurve {
+        std::vector<double> samples;
+        double timestep = 0.0;
+    };
+
+    // TODO: still figuring out the format of spk_mix
+    struct SpeakerMixCurve {
+        std::unordered_map<std::string, std::vector<double>> spk;
+        double timestep = 0.0;
+    };
+
+    struct DsSegment {
+        double offset = 0.0;
+        std::vector<std::string> ph_seq;
+        std::vector<double> ph_dur;
+        SampleCurve f0;
+        SampleCurve gender;
+        SampleCurve velocity;
+        SampleCurve energy;
+        SampleCurve breathiness;
+        SpeakerMixCurve spk_mix;
+    };
 }
 
 #endif //DS_ONNX_INFER_NAMESPACE_H

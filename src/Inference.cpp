@@ -1,5 +1,6 @@
 #include <unordered_map>
 #include <unordered_set>
+#include <iostream>
 
 #include "cpu_provider_factory.h"
 #include "dml_provider_factory.h"
@@ -15,7 +16,7 @@ namespace diffsinger {
     template<class T_vector, class T_tensor = T_vector>
     inline Ort::Value vectorToTensor(const std::vector<T_vector> &vec);
 
-    template<class T_vector, class T_tensor>
+    template<class T_vector, class T_tensor = T_vector>
     inline Ort::Value vectorToTensorWithShape(const std::vector<T_vector> &vec, const std::vector<int64_t> &shape);
 
     template<class T_scalar, class T_tensor = T_scalar>
@@ -92,6 +93,12 @@ namespace diffsinger {
         bool supportsSpeakers = supportedInputNames.find("spk_embed") != supportedInputNames.end();
         bool supportsEnergy = supportedInputNames.find("energy") != supportedInputNames.end();
         bool supportsBreathiness = supportedInputNames.find("breathiness") != supportedInputNames.end();
+
+        std::cout << "Velocity: " << (supportsVelocity ? "Yes" : "No") << "\n";
+        std::cout << "Gender: " << (supportsGender ? "Yes" : "No") << "\n";
+        std::cout << "Speakers: " << (supportsSpeakers ? "Yes" : "No") << "\n";
+        std::cout << "Energy: " << (supportsEnergy ? "Yes" : "No") << "\n";
+        std::cout << "Breathiness: " << (supportsBreathiness ? "Yes" : "No") << "\n";
 
         // tokens
         appendVectorToInputTensors<int64_t, int64_t>("tokens", pd.tokens, inputNames, inputTensors);
