@@ -39,12 +39,13 @@ namespace diffsinger {
 
             auto random_pitch_shifting_node = augmentation_args_node["random_pitch_shifting"];
             auto pitch_range_node = random_pitch_shifting_node["range"];
+            dsConfig.randomPitchShifting.domain = AxisDomain::Linear;
             dsConfig.randomPitchShifting.rangeLow = pitch_range_node[0].as<float>();
             dsConfig.randomPitchShifting.rangeHigh = pitch_range_node[1].as<float>();
             dsConfig.randomPitchShifting.scale = random_pitch_shifting_node["scale"].as<float>();
 
             auto random_time_stretching_node = augmentation_args_node["random_time_stretching"];
-            dsConfig.randomTimeShifting.domain = random_time_stretching_node["domain"].as<std::string>();
+            dsConfig.randomTimeShifting.domain = random_time_stretching_node["domain"].as<std::string>() == "log" ? AxisDomain::Log : AxisDomain::Linear;
             auto time_range_node = random_time_stretching_node["range"];
             dsConfig.randomTimeShifting.rangeLow = time_range_node[0].as<float>();
             dsConfig.randomTimeShifting.rangeHigh = time_range_node[1].as<float>();

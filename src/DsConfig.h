@@ -8,6 +8,11 @@
 #include "TString.h"
 
 namespace diffsinger {
+    enum class AxisDomain {
+        Linear,
+        Log
+    };
+
     struct DsVocoderConfig {
         std::string name;
 
@@ -18,17 +23,12 @@ namespace diffsinger {
         int sampleRate = 44100;
     };
 
-    struct RandomPitchShifting {
-        float rangeLow = -5.0f;
-        float rangeHigh = 5.0f;
-        float scale = 1.5f;
-    };
 
-    struct RandomTimeShifting {
-        std::string domain = "log";
-        float rangeLow = 0.5f;
-        float rangeHigh = 2.0f;
-        float scale = 1.5f;
+    struct AugmentationArgs {
+        float rangeLow = 0.0f;
+        float rangeHigh = 0.0f;
+        float scale = 0.0f;
+        AxisDomain domain = AxisDomain::Linear;
     };
 
     struct DsConfig {
@@ -37,8 +37,8 @@ namespace diffsinger {
         std::string vocoder;
         std::vector<std::string> speakers;
 
-        RandomTimeShifting randomTimeShifting;
-        RandomPitchShifting randomPitchShifting;
+        AugmentationArgs randomTimeShifting {0.5f, 2.0f, 1.5f, AxisDomain::Log};
+        AugmentationArgs randomPitchShifting{-5.0f, 5.0f, 1.5f, AxisDomain::Linear};
 
         int hiddenSize = 256;
         int hopSize = 512;
