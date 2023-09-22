@@ -1,33 +1,16 @@
-//
-// Created by zhang on 2023/9/16.
-//
 #include <iostream>
 #include <iterator>
 #include <numeric>
 #include <unordered_map>
 
-#include "DsCommon.h"
+#include "DsProject.h"
 #include "ArrayUtil.hpp"
+#include "SampleCurve.h"
 #include "Preprocess.h"
 
 
 namespace diffsinger {
 
-    /**
-     * @brief Transform curve samples to target time step and length using interpolation.
-     *
-     * @param inputSamples    The original curve samples.
-     * @param inputTimestep   The original curve time step.
-     * @param targetTimestep  The target curve time step.
-     * @param targetLength    The target length of sample points.
-     * @return                The target curve samples
-     *
-     * This function transforms original curve to target time step and length. The original curve
-     * will be interpolated, and then resized to target length. If the size of interpolated vector is
-     * smaller than target length, it will be truncated; otherwise, it will be expanded using the last value.
-     */
-    inline std::vector<double> curveTransform(const std::vector<double> &inputSamples, double inputTimestep,
-                                       double targetTimestep, int64_t targetLength);
     inline std::vector<int64_t> phonemesToTokens(const std::unordered_map<std::string, int64_t> &name2token,
                                           const std::vector<std::string> &phonemes);
     inline std::vector<int64_t> phonemeDurationToFrames(const std::vector<double> &durations,
@@ -48,47 +31,15 @@ namespace diffsinger {
 
         int64_t targetLength = std::accumulate(pd.durations.begin(), pd.durations.end(), static_cast<int64_t>(0));
 
-        pd.f0 = curveTransform(dsSegment.f0.samples, dsSegment.f0.timestep, frameLength, targetLength);
-        pd.velocity = curveTransform(dsSegment.velocity.samples, dsSegment.velocity.timestep, frameLength, targetLength);
-        pd.gender = curveTransform(dsSegment.gender.samples, dsSegment.gender.timestep, frameLength, targetLength);
-        pd.energy = curveTransform(dsSegment.energy.samples, dsSegment.energy.timestep, frameLength, targetLength);
-        pd.breathiness = curveTransform(dsSegment.breathiness.samples, dsSegment.breathiness.timestep, frameLength, targetLength);
+        pd.f0 = dsSegment.f0.resample(frameLength, targetLength);
+        pd.velocity = dsSegment.velocity.resample(frameLength, targetLength);
+        pd.gender = dsSegment.gender.resample(frameLength, targetLength);
+        pd.energy = dsSegment.energy.resample(frameLength, targetLength);
+        pd.breathiness = dsSegment.breathiness.resample(frameLength, targetLength);
 
         // TODO: spk_mix
 
         return pd;
-    }
-
-    std::vector<double> curveTransform(const std::vector<double> &inputSamples, double inputTimestep, double targetTimestep, int64_t targetLength) {
-        if (inputSamples.empty() || inputTimestep == 0 || targetTimestep == 0 || targetLength == 0) {
-            return {};
-        }
-        // Find the time duration of input samples in seconds.
-        auto tMax = static_cast<double>(inputSamples.size() - 1) * inputTimestep;
-
-        // Construct target time axis for interpolation.
-        auto targetTimeAxis = arange(0.0, tMax, targetTimestep);
-
-        // Construct input time axis (for interpolation).
-        auto inputTimeAxis = arange(0.0, static_cast<double>(inputSamples.size()), 1.0);
-        std::transform(inputTimeAxis.begin(), inputTimeAxis.end(), inputTimeAxis.begin(),
-                       [inputTimestep](double value) {return value * inputTimestep; });
-
-        // Interpolate sample curve to target time axis
-        auto targetSamples = interpolate(targetTimeAxis, inputTimeAxis, inputSamples);
-
-        // Resize the interpolated curve vector to target length
-        auto actualLength = static_cast<int64_t>(targetSamples.size());
-
-        if (actualLength > targetLength) {
-            // Truncate vector to target length
-            targetSamples.resize(targetLength);
-        } else if (actualLength < targetLength) {
-            // Expand vector to target length, filling last value
-            auto lastValue = targetSamples.back();
-            targetSamples.resize(targetLength, lastValue);
-        }
-        return targetSamples;
     }
 
     std::vector<int64_t> phonemesToTokens(const std::unordered_map<std::string, int64_t> &name2token,

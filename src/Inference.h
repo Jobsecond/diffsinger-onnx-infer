@@ -8,7 +8,7 @@
 #include <onnxruntime_cxx_api.h>
 
 #include "TString.h"
-#include "DsCommon.h"
+#include "ModelData.h"
 
 namespace diffsinger {
     Ort::Session createSession(const TString &modelPath,

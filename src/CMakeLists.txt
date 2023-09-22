@@ -23,9 +23,13 @@ add_executable(${PROJECT_NAME}
         Preprocess.h
         Inference.cpp
         Inference.h
-        DsCommon.h
+        DsProject.h
         DsConfig.cpp
-        DsConfig.h)
+        DsConfig.h
+        DsProject.cpp
+        SampleCurve.cpp
+        SampleCurve.h
+        ModelData.h)
 
 
 find_package(SndFile CONFIG REQUIRED)

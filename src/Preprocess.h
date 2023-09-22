@@ -11,10 +11,9 @@
 #include <numeric>
 #include <cmath>
 
-#include "DsCommon.h"
+#include "ModelData.h"
 
 namespace diffsinger {
-
 
     PreprocessedData acousticPreprocess(
             const std::unordered_map<std::string, int64_t> &name2token,
