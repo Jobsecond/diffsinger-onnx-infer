@@ -70,6 +70,7 @@ namespace diffsinger {
 
         if (config["speakers"]) {
             dsConfig.speakers = config["speakers"].as<std::vector<std::string>>();
+            dsConfig.spkEmb.loadSpeakers(dsConfig.speakers, dsConfigDir);
         }
 
         if (ok) {

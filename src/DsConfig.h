@@ -6,6 +6,7 @@
 #include <filesystem>
 
 #include "TString.h"
+#include "SpeakerEmbed.h"
 
 namespace diffsinger {
     enum class AxisDomain {
@@ -36,6 +37,7 @@ namespace diffsinger {
         std::filesystem::path acoustic;
         std::string vocoder;
         std::vector<std::string> speakers;
+        SpeakerEmbed spkEmb;
 
         AugmentationArgs randomTimeShifting {0.5f, 2.0f, 1.5f, AxisDomain::Log};
         AugmentationArgs randomPitchShifting{-5.0f, 5.0f, 1.5f, AxisDomain::Linear};

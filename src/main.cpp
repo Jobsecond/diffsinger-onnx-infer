@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 
 #include <onnxruntime_cxx_api.h>
 
@@ -14,7 +15,6 @@
 #include "TString.h"
 #include "DsProject.h"
 #include "DsConfig.h"
-#include "ArrayUtil.hpp"
 #include "Preprocess.h"
 #include "Inference.h"
 

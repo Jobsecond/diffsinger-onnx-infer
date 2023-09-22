@@ -33,7 +33,15 @@ namespace diffsinger {
 
         pd.f0 = dsSegment.f0.resample(frameLength, targetLength);
         pd.velocity = dsSegment.velocity.resample(frameLength, targetLength);
+        if (pd.velocity.empty()) {
+            pd.velocity.resize(targetLength, 1.0);
+        }
+
         pd.gender = dsSegment.gender.resample(frameLength, targetLength);
+        if (pd.gender.empty()) {
+            pd.gender.resize(targetLength, 0.0);
+        }
+
         pd.energy = dsSegment.energy.resample(frameLength, targetLength);
         pd.breathiness = dsSegment.breathiness.resample(frameLength, targetLength);
 

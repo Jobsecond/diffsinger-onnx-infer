@@ -29,7 +29,9 @@ add_executable(${PROJECT_NAME}
         DsProject.cpp
         SampleCurve.cpp
         SampleCurve.h
-        ModelData.h)
+        ModelData.h
+        SpeakerEmbed.cpp
+        SpeakerEmbed.h)
 
 
 find_package(SndFile CONFIG REQUIRED)
