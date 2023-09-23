@@ -119,19 +119,33 @@ namespace diffsinger {
         // Speakers Embed
         if (supportsSpeakers) {
             auto spkEmbedFrames = static_cast<int64_t>(pd.spk_embed.size()) / spkEmbedLastDimension;
-            appendVectorToInputTensorsWithShape<double, float>("spk_embed", pd.spk_embed,
+            appendVectorToInputTensorsWithShape<float, float>("spk_embed", pd.spk_embed,
                                                                {1, spkEmbedFrames, spkEmbedLastDimension},
                                                                inputNames, inputTensors);
         }
+        // TODO: If energy and breathiness are not supplied but required by the acoustic model,
+        //       they should be inferred by the variance model.
+        bool isVarianceError = false;
         // Energy
         if (supportsEnergy) {
+            if (pd.energy.empty()) {
+                std::cout << "ERROR: The acoustic model required energy input, but such parameter is not supplied.\n";
+                isVarianceError = true;
+            }
             appendVectorToInputTensors<double, float>("energy", pd.energy, inputNames, inputTensors);
         }
         // Breathiness
         if (supportsBreathiness) {
+            if (pd.breathiness.empty()) {
+                std::cout << "ERROR: The acoustic model required breathiness input, but such parameter is not supplied.\n";
+                isVarianceError = true;
+            }
             appendVectorToInputTensors<double, float>("breathiness", pd.breathiness, inputNames, inputTensors);
         }
 
+        if (isVarianceError) {
+            return Ort::Value(nullptr);
+        }
         // Create output names
         const char *outputNames[] = { "mel" };
         auto outputNamesSize = sizeof(outputNames) / sizeof(outputNames[0]);

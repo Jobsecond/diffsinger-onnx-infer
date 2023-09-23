@@ -22,7 +22,7 @@ namespace diffsinger {
         SpeakerMixCurve spk_mix;
     };
 
-    std::vector<DsSegment> loadDsProject(const TString &dsFilePath);
+    std::vector<DsSegment> loadDsProject(const TString &dsFilePath, const std::string &spkMixStr = "");
 
 }
 

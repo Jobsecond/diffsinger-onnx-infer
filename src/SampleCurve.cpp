@@ -7,6 +7,13 @@ namespace diffsinger {
         if (samples.empty() || timestep == 0 || targetTimestep == 0 || targetLength == 0) {
             return {};
         }
+        if (samples.size() == 1) {
+            std::vector<double> result(targetLength, samples[0]);
+            return result;
+        }
+        if (targetLength == 1) {
+            return { samples[0] };
+        }
         // Find the time duration of input samples in seconds.
         auto tMax = static_cast<double>(samples.size() - 1) * timestep;
 
@@ -33,5 +40,35 @@ namespace diffsinger {
             targetSamples.resize(targetLength, lastValue);
         }
         return targetSamples;
+    }
+
+    SampleCurve::SampleCurve() : samples(), timestep(0.0) {}
+
+    SampleCurve::SampleCurve(double fillValue, int64_t targetLength, double targetTimestep)
+            : samples(targetLength, fillValue), timestep(targetTimestep) {}
+
+    SampleCurve::SampleCurve(const std::vector<double> &samples, double timestep)
+            : samples(samples), timestep(timestep) {}
+
+    SampleCurve::SampleCurve(std::vector<double> &&samples, double timestep)
+            : samples(samples), timestep(timestep) {}
+
+    SpeakerMixCurve SpeakerMixCurve::resample(double targetTimestep, int64_t targetLength) const {
+        SpeakerMixCurve smc;
+        smc.spk.reserve(spk.size());
+        for (const auto &s : spk) {
+            smc.spk[s.first] = {std::move(s.second.resample(targetTimestep, targetLength)), targetTimestep};
+        }
+        return smc;
+    }
+
+    SpeakerMixCurve SpeakerMixCurve::fromStaticMix(const std::unordered_map<std::string, double> &spk,
+                                                   int64_t targetLength, double targetTimestep) {
+        SpeakerMixCurve smc;
+        smc.spk.reserve(spk.size());
+        for (const auto &s : spk) {
+            smc.spk[s.first] = SampleCurve(s.second, targetLength, targetTimestep);
+        }
+        return smc;
     }
 }

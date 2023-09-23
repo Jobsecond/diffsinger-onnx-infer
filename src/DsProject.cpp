@@ -6,9 +6,10 @@
 
 #include "ArrayUtil.hpp"
 #include "DsProject.h"
+#include "SpeakerEmbed.h"
 
 namespace diffsinger {
-    std::vector<DsSegment> loadDsProject(const TString &dsFilePath) {
+    std::vector<DsSegment> loadDsProject(const TString &dsFilePath, const std::string &spkMixStr) {
         std::ifstream dsFile(dsFilePath);
 
         if (!dsFile.is_open()) {
@@ -93,7 +94,11 @@ namespace diffsinger {
             loadSampleCurve("energy", "energy_timestep", &dsSegment.energy);
             loadSampleCurve("breathiness", "breathiness_timestep", &dsSegment.breathiness);
 
-            // TODO: spk_mix
+            // TODO: Currently only supports static spk_mix.
+            //       Haven't decided yet how to store curve spk_mix in ds file.
+            if (!spkMixStr.empty()) {
+                dsSegment.spk_mix = SpeakerMixCurve::fromStaticMix(SpeakerEmbed::parseMixString(spkMixStr));
+            }
 
             dsSegment.offset = segment.HasMember("offset") ? segment["offset"].GetDouble() : 0.0;
             dsFile.close();

@@ -15,9 +15,12 @@
 
 namespace diffsinger {
 
+    struct DsConfig;
+
     PreprocessedData acousticPreprocess(
             const std::unordered_map<std::string, int64_t> &name2token,
             const DsSegment &dsSegment,
+            const DsConfig &dsConfig,
             double frameLength);
 
 }

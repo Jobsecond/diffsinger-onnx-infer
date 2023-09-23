@@ -31,6 +31,8 @@ namespace diffsinger {
             SpeakerEmbedArray emb{};
             inputFile.read(reinterpret_cast<char *>(emb.data()), emb.size() * sizeof(float));
             m_emb[speaker] = emb;
+            SpeakerEmbedMap mmmm;
+
             inputFile.close();
         }
     }
@@ -39,7 +41,7 @@ namespace diffsinger {
         return m_emb;
     }
 
-    SpeakerEmbedArray SpeakerEmbed::getMixedEmb(const std::unordered_map<std::string, double> &mix) {
+    SpeakerEmbedArray SpeakerEmbed::getMixedEmb(const std::unordered_map<std::string, double> &mix) const {
         SpeakerEmbedArray arr{};
         for (const auto &item : mix) {
             auto it = m_emb.find(item.first);
@@ -93,7 +95,7 @@ namespace diffsinger {
         return result;
     }
 
-    SpeakerEmbedArray SpeakerEmbed::getMixedEmb(const std::string &inputString) {
+    SpeakerEmbedArray SpeakerEmbed::getMixedEmb(const std::string &inputString) const {
         return getMixedEmb(parseMixString(inputString));
     }
 }

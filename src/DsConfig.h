@@ -22,6 +22,8 @@ namespace diffsinger {
         int numMelBins = 128;
         int hopSize = 512;
         int sampleRate = 44100;
+
+        static DsVocoderConfig fromYAML(const TString &dsVocoderConfigPath, bool *ok = nullptr);
     };
 
 
@@ -49,10 +51,9 @@ namespace diffsinger {
         bool useSpeedEmbed = false;
         bool useEnergyEmbed = false;
         bool useBreathinessEmbed = false;
-    };
 
-    DsConfig loadDsConfig(const TString &dsConfigPath, bool *ok = nullptr);
-    DsVocoderConfig loadDsVocoderConfig(const TString &dsVocoderConfigPath, bool *ok = nullptr);
+        static DsConfig fromYAML(const TString &dsConfigPath, bool *ok = nullptr);
+    };
 }
 
 #endif //DS_ONNX_INFER_DSCONFIG_H

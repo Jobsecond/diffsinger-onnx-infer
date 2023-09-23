@@ -11,6 +11,11 @@ namespace diffsinger {
         std::vector<double> samples;
         double timestep = 0.0;
 
+        SampleCurve();
+        SampleCurve(const std::vector<double> &samples, double timestep);
+        SampleCurve(std::vector<double> &&samples, double timestep);
+        SampleCurve(double fillValue, int64_t targetLength, double targetTimestep);
+
         /**
          * @brief Resamples curve to target time step and length using interpolation.
          *
@@ -27,9 +32,23 @@ namespace diffsinger {
 
     // TODO: still figuring out the format of spk_mix
     struct SpeakerMixCurve {
-        std::unordered_map<std::string, std::vector<float>> spk;
-        double timestep = 0.0;
+        std::unordered_map<std::string, SampleCurve> spk;
+
+        SpeakerMixCurve resample(double targetTimestep, int64_t targetLength) const;
+        static SpeakerMixCurve fromStaticMix(const std::unordered_map<std::string, double> &spk,
+                                             int64_t targetLength = 1,
+                                             double targetTimestep = 1.0);
+        inline size_t size() const;
+        inline bool empty() const;
     };
+
+    bool SpeakerMixCurve::empty() const {
+        return spk.empty();
+    }
+
+    size_t SpeakerMixCurve::size() const {
+        return spk.size();
+    }
 }
 
 

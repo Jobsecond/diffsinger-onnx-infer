@@ -88,7 +88,7 @@ namespace diffsinger {
 
         auto dsProject = loadDsProject(dsFilePath);
 
-        auto dsConfig = loadDsConfig(dsConfigPath);
+        auto dsConfig = DsConfig::fromYAML(dsConfigPath);
         std::unordered_map<std::string, int64_t> name2token;
         std::string line;
         std::ifstream phonemesFile(dsConfig.phonemes);
@@ -100,18 +100,23 @@ namespace diffsinger {
         }
         phonemesFile.close();
 
-        auto vocoderConfig = loadDsVocoderConfig(vocoderConfigPath);
+        auto vocoderConfig = DsVocoderConfig::fromYAML(vocoderConfigPath);
         int sampleRate = vocoderConfig.sampleRate;
         int hopSize = vocoderConfig.hopSize;
         double frameLength = 1.0 * hopSize / sampleRate;
         size_t numSegments = dsProject.size();
         for (size_t i = 0; i <= numSegments; i++) {
             std::cout << i << " of " << numSegments << "\n";
-            auto pd = diffsinger::acousticPreprocess(name2token, dsProject[i], frameLength);
+            std::cout << "Preprocessing input" << "\n";
+            auto pd = diffsinger::acousticPreprocess(name2token, dsProject[i], dsConfig, frameLength);
 
             std::cout << "Mel" << "\n";
             auto mel = diffsinger::acousticInfer(dsConfig.acoustic, pd, acousticSpeedup);
 
+            if (mel == Ort::Value(nullptr)) {
+                std::cout << "ERROR: Acoustic Infer failed.\n";
+                continue;
+            }
             // TODO: mel will be `std::move`d in the next step, so it will not be usable after that.
             std::cout << "Waveform" << "\n";
             auto waveform = diffsinger::vocoderInfer(vocoderConfig.model, mel, pd.f0);

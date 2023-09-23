@@ -6,7 +6,7 @@
 #include "DsConfig.h"
 
 namespace diffsinger {
-    DsConfig loadDsConfig(const TString &dsConfigPath, bool *ok) {
+    DsConfig DsConfig::fromYAML(const TString &dsConfigPath, bool *ok) {
         DsConfig dsConfig;
 
         std::ifstream fileStream(dsConfigPath);
@@ -21,13 +21,13 @@ namespace diffsinger {
         auto dsConfigDir = dsConfigPathFs.parent_path();
         YAML::Node config = YAML::Load(fileStream);
         if (config["phonemes"]) {
-            auto phonemes = config["phonemes"].as<std::string>();
-            dsConfig.phonemes = dsConfigDir / phonemes;
+            auto phonemesFilename = config["phonemes"].as<std::string>();
+            dsConfig.phonemes = dsConfigDir / phonemesFilename;
         }
 
         if (config["acoustic"]) {
-            auto acoustic = config["acoustic"].as<std::string>();
-            dsConfig.acoustic = dsConfigDir / acoustic;
+            auto acousticFilename = config["acoustic"].as<std::string>();
+            dsConfig.acoustic = dsConfigDir / acousticFilename;
         }
 
         if (config["vocoder"]) {
@@ -79,7 +79,7 @@ namespace diffsinger {
         return dsConfig;
     }
 
-    DsVocoderConfig loadDsVocoderConfig(const TString &dsVocoderConfigPath, bool *ok) {
+    DsVocoderConfig DsVocoderConfig::fromYAML(const TString &dsVocoderConfigPath, bool *ok) {
         DsVocoderConfig dsVocoderConfig;
 
         std::ifstream fileStream(dsVocoderConfigPath);

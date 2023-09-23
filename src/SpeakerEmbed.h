@@ -21,8 +21,8 @@ namespace diffsinger {
         SpeakerEmbed(const std::vector<std::string> &speakers, const TString &path);
 
         void loadSpeakers(const std::vector<std::string> &speakers, const TString &path);
-        SpeakerEmbedArray getMixedEmb(const std::unordered_map<std::string, double> &mix);
-        SpeakerEmbedArray getMixedEmb(const std::string &inputString);
+        SpeakerEmbedArray getMixedEmb(const std::unordered_map<std::string, double> &mix) const;
+        SpeakerEmbedArray getMixedEmb(const std::string &inputString) const;
 
         static std::unordered_map<std::string, double> parseMixString(const std::string &inputString);
 

@@ -13,7 +13,7 @@ namespace diffsinger {
         std::vector<double> f0;
         std::vector<double> velocity;
         std::vector<double> gender;
-        std::vector<double> spk_embed;
+        std::vector<float> spk_embed;
         std::vector<double> energy;
         std::vector<double> breathiness;
     };
