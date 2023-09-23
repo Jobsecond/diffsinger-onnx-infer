@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include <utility>
 
 #include <onnxruntime_cxx_api.h>
 
@@ -33,12 +34,12 @@ using diffsinger::MBStringToWString;
 int main(int argc, char *argv[]) {
 
     argparse::ArgumentParser program("DiffSinger");
-    program.add_argument("--ds-file").help("Path to .ds file");
-    program.add_argument("--acoustic-config").help("Path to acoustic dsconfig.yaml");
-    program.add_argument("--vocoder-config").help("Path to vocoder.yaml");
+    program.add_argument("--ds-file").required().help("Path to .ds file");
+    program.add_argument("--acoustic-config").required().help("Path to acoustic dsconfig.yaml");
+    program.add_argument("--vocoder-config").required().help("Path to vocoder.yaml");
     program.add_argument("--spk").default_value(std::string())
             .help(R"(Speaker Mixture (e.g. "name" or "name1|name2" or "name1:0.25|name2:0.75"))");
-    program.add_argument("--title").help("Output Audio File Title");
+    program.add_argument("--out").required().help("Output Audio Filename (*.wav)");
     program.add_argument("--speedup").scan<'i', int>().default_value(10).help("PNDM speedup ratio");
 
     try {
@@ -53,7 +54,7 @@ int main(int argc, char *argv[]) {
     auto dsConfigPath = program.get("--acoustic-config");
     auto vocoderConfigPath = program.get("--vocoder-config");
     auto spkMixStr = program.get("--spk");
-    auto outputAudioTitle = program.get("--title");
+    auto outputAudioTitle = program.get("--out");
     auto speedup = program.get<int>("--speedup");
     if (speedup < 1 || speedup > 1000) {
         speedup = 10;
@@ -111,29 +112,55 @@ namespace diffsinger {
         int hopSize = vocoderConfig.hopSize;
         double frameLength = 1.0 * hopSize / sampleRate;
         size_t numSegments = dsProject.size();
+
         AcousticInference acousticInference(dsConfig.acoustic);
         acousticInference.initSession(true);
+
+        std::vector< std::pair<int64_t, std::vector<float>> > waveformArr{};
+        waveformArr.reserve(numSegments);
+
         for (size_t i = 0; i < numSegments; i++) {
             std::cout << i + 1 << " of " << numSegments << "\n";
             std::cout << "Preprocessing input" << "\n";
-            auto pd = diffsinger::acousticPreprocess(name2token, dsProject[i], dsConfig, frameLength);
+            auto offsetInSamples = static_cast<int64_t>(std::ceil(dsProject[i].offset * vocoderConfig.sampleRate));
+
+            auto pd = acousticPreprocess(name2token, dsProject[i], dsConfig, frameLength);
 
             std::cout << "Mel" << "\n";
             auto mel = acousticInference.inferToOrtValue(pd, acousticSpeedup);
 
             if (mel == Ort::Value(nullptr)) {
                 std::cout << "ERROR: Acoustic Infer failed.\n";
+                waveformArr.emplace_back(offsetInSamples, std::vector<float>{});
                 continue;
             }
-            // TODO: mel will be `std::move`d in the next step, so it will not be usable after that.
+            // mel will be `std::move`d in the next steps, so it will not be usable after that.
             std::cout << "Waveform" << "\n";
-            auto waveform = diffsinger::vocoderInfer(vocoderConfig.model, mel, pd.f0);
+            auto waveform = vocoderInfer(vocoderConfig.model, mel, pd.f0);
 
-            std::basic_stringstream<TChar> ss;
-            ss << outputWavePath << DS_T("_") << (i + 1) << DS_T(".wav");
-            SndfileHandle audioFile(ss.str().c_str(), SFM_WRITE, SF_FORMAT_WAV | SF_FORMAT_FLOAT, 1, sampleRate);
-            auto numFrames = static_cast<sf_count_t>(waveform.size());
-            audioFile.write(waveform.data(), numFrames);
+            waveformArr.emplace_back(offsetInSamples, std::move(waveform));
         }
+
+        std::cout << "Concatenating and saving wave file...\n";
+        int64_t totalSamples = 0;
+        for (const auto& [offsetInSamples, waveform] : waveformArr) {
+            auto currentSamples = offsetInSamples + static_cast<int64_t>(waveform.size());
+            totalSamples = (totalSamples < currentSamples) ? currentSamples : totalSamples;
+        }
+        std::vector<float> wavBuffer(totalSamples, 0.0f);
+        for (const auto& [offsetInSamples, waveform] : waveformArr) {
+            auto currentSamples = offsetInSamples + static_cast<int64_t>(waveform.size());
+            std::transform(
+                wavBuffer.begin() + offsetInSamples,
+                wavBuffer.begin() + currentSamples,
+                waveform.begin(),
+                wavBuffer.begin() + offsetInSamples,
+                std::plus<>()
+            );
+        }
+
+        SndfileHandle audioFile(outputWavePath.c_str(), SFM_WRITE, SF_FORMAT_WAV | SF_FORMAT_FLOAT, 1, sampleRate);
+        auto numFrames = static_cast<sf_count_t>(wavBuffer.size());
+        audioFile.write(wavBuffer.data(), numFrames);
     }
 }

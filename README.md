@@ -3,15 +3,16 @@
 
 ## Command Line Options
 ```
-Usage: ds_onnx_infer [-h] [--ds-file VAR] [--acoustic-config VAR] [--vocoder-config VAR] [--title VAR] [--speedup VAR]
+Usage: ds_onnx_infer [-h] --ds-file VAR --acoustic-config VAR --vocoder-config VAR [--spk VAR] --out VAR [--speedup VAR]
 
 Optional arguments:
   -h, --help            shows help message and exits
   -v, --version         prints version information and exits
-  --ds-file             Path to .ds file
-  --acoustic-config     Path to acoustic dsconfig.yaml
-  --vocoder-config      Path to vocoder.yaml
-  --title               Output Audio File Title
+  --ds-file             Path to .ds file [required]
+  --acoustic-config     Path to acoustic dsconfig.yaml [required]
+  --vocoder-config      Path to vocoder.yaml [required]
+  --spk                 Speaker Mixture (e.g. "name" or "name1|name2" or "name1:0.25|name2:0.75") [default: ""]
+  --out                 Output Audio Filename (*.wav) [required]
   --speedup             PNDM speedup ratio [default: 10]
 ```
 
