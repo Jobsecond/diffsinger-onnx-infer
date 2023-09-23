@@ -43,10 +43,14 @@ namespace diffsinger {
 
     /* IMPLEMENTATION BELOW */
 
-    Ort::Session createSession(const TString &modelPath,
-                               bool useDml) {
+    AcousticInference::AcousticInference(const TString &modelPath)
+            : m_modelPath(modelPath), m_session(nullptr), ortApi(Ort::GetApi()) {}
 
-        OrtApi const& ortApi = Ort::GetApi(); // Uses ORT_API_VERSION
+    TString AcousticInference::getModelPath() {
+        return m_modelPath;
+    }
+
+    void AcousticInference::initSession(bool useDml) {
         auto options = Ort::SessionOptions();
         if (useDml) {
             const OrtDmlApi *ortDmlApi;
@@ -60,18 +64,20 @@ namespace diffsinger {
 
         //options.AppendExecutionProvider_CUDA(options1);
         Ort::Env env(/*ORT_LOGGING_LEVEL_WARNING*/ ORT_LOGGING_LEVEL_ERROR, "DiffSinger");
-        auto session = Ort::Session(env, modelPath.c_str(), options);
-        return session;
+        m_session = Ort::Session(env, m_modelPath.c_str(), options);
     }
 
-    Ort::Value acousticInfer(const TString &model, const PreprocessedData &pd, int speedup) {
-        auto session = createSession(model, true);
+    Ort::Value AcousticInference::inferToOrtValue(const PreprocessedData &pd, int speedup) {
+        if (!m_session) {
+            std::cout << "Session is not initialized!\n";
+            return Ort::Value(nullptr);
+        }
 
         std::vector<const char *> inputNames;
         std::vector<Ort::Value> inputTensors;
 
-        auto supportedInputNames = getSupportedInputNames(session);
-        auto supportedOutputNames = getSupportedOutputNames(session);
+        auto supportedInputNames = getSupportedInputNames(m_session);
+        auto supportedOutputNames = getSupportedOutputNames(m_session);
 
         // Basic validation
         bool isValidModel = true;
@@ -151,7 +157,7 @@ namespace diffsinger {
         auto outputNamesSize = sizeof(outputNames) / sizeof(outputNames[0]);
 
         // Run the session
-        std::vector<Ort::Value> outputTensors = session.Run(
+        auto outputTensors = m_session.Run(
                 Ort::RunOptions{},
                 inputNames.data(),
                 inputTensors.data(),
@@ -164,6 +170,27 @@ namespace diffsinger {
 
         return std::move(outputTensor);
     }
+
+    std::vector<float> AcousticInference::ortValueToVector(const Ort::Value &value) {
+        auto buffer = value.GetTensorData<float>();
+        std::vector<float> output(buffer, buffer + value.GetTensorTypeAndShapeInfo().GetElementCount());
+        return output;
+    }
+
+    std::vector<float> AcousticInference::infer(const PreprocessedData &pd, int speedup) {
+        return ortValueToVector(inferToOrtValue(pd, speedup));
+    }
+
+    bool AcousticInference::hasSession() {
+        return m_session;
+    }
+
+    void AcousticInference::endSession() {
+        Ort::Session emptySession(nullptr);
+        std::swap(m_session, emptySession);
+    }
+
+
 
     std::vector<float> vocoderInfer(const TString& model, Ort::Value& mel, const std::vector<double>& f0) {
         Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "VocoderInfer");

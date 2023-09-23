@@ -105,13 +105,15 @@ namespace diffsinger {
         int hopSize = vocoderConfig.hopSize;
         double frameLength = 1.0 * hopSize / sampleRate;
         size_t numSegments = dsProject.size();
-        for (size_t i = 0; i <= numSegments; i++) {
-            std::cout << i << " of " << numSegments << "\n";
+        AcousticInference acousticInference(dsConfig.acoustic);
+        acousticInference.initSession(true);
+        for (size_t i = 0; i < numSegments; i++) {
+            std::cout << i + 1 << " of " << numSegments << "\n";
             std::cout << "Preprocessing input" << "\n";
             auto pd = diffsinger::acousticPreprocess(name2token, dsProject[i], dsConfig, frameLength);
 
             std::cout << "Mel" << "\n";
-            auto mel = diffsinger::acousticInfer(dsConfig.acoustic, pd, acousticSpeedup);
+            auto mel = acousticInference.inferToOrtValue(pd, acousticSpeedup);
 
             if (mel == Ort::Value(nullptr)) {
                 std::cout << "ERROR: Acoustic Infer failed.\n";
