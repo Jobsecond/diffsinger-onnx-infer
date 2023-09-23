@@ -4,6 +4,10 @@ $nugetExePath = $projectRoot + "/nuget.exe"
 $packagesPath = $projectRoot + "/src/thirdparty/nuget_packages"
 $packagesFile = $projectRoot + "/nuget_packages.txt"
 
+$nugetCachePath = $projectRoot + "/.nuget"
+
+$env:NUGET_PACKAGES = $nugetCachePath
+
 # Handle proxy environment variables
 $proxyVariables = Get-ChildItem -Path "Env:" | Where-Object { $_.Name -match "all_proxy|https_proxy|http_proxy" }
 
@@ -41,5 +45,5 @@ $packages | ForEach-Object {
     $packageVersion = ($_ -split "=")[1]
 
     # Install the package to the specified directory
-    & $nugetExePath install $packageName -Version $packageVersion -ExcludeVersion -OutputDirectory $packagesPath
+    & $nugetExePath install $packageName -Version $packageVersion -OutputDirectory $packagesPath
 }
