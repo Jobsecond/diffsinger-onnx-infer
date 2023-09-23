@@ -4,11 +4,32 @@ $nugetExePath = $projectRoot + "/nuget.exe"
 $packagesPath = $projectRoot + "/src/thirdparty/nuget_packages"
 $packagesFile = $projectRoot + "/nuget_packages.txt"
 
+# Handle proxy environment variables
+$proxyVariables = Get-ChildItem -Path "Env:" | Where-Object { $_.Name -match "all_proxy|https_proxy|http_proxy" }
+
+$proxyUrl = ""
+
+if ($proxyVariables) {
+    foreach ($variable in $proxyVariables) {
+        $value = $variable.Value
+
+        if ($value -like "http://*" -or $value -like "https://*") {
+            $proxyUrl = $value
+            break
+        }
+    }
+}
+
 # Check if nuget.exe exists, download if not
 if (-not (Test-Path -Path $nugetExePath)) {
     Write-Output "NuGet executable not found. Downloading it now..."
     $nugetUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
-    Invoke-WebRequest -Uri $nugetUrl -OutFile $nugetExePath
+    if ($proxyUrl) {
+        Invoke-WebRequest -Uri $nugetUrl -OutFile $nugetExePath -Proxy $proxyUrl
+    }
+    else {
+        Invoke-WebRequest -Uri $nugetUrl -OutFile $nugetExePath
+    }
 }
 
 # Read the package names and versions from the file
