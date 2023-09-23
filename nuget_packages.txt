@@ -1,0 +1,2 @@
+Microsoft.AI.DirectML=1.12.1
+Microsoft.ML.OnnxRuntime.DirectML=1.16.0
