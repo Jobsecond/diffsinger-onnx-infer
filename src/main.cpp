@@ -24,6 +24,7 @@ namespace diffsinger {
              const TString &dsConfigPath,
              const TString &vocoderConfigPath,
              const TString &outputWavePath,
+             const std::string &spkMixStr = "",
              int acousticSpeedup = 10);
 }
 
@@ -35,6 +36,8 @@ int main(int argc, char *argv[]) {
     program.add_argument("--ds-file").help("Path to .ds file");
     program.add_argument("--acoustic-config").help("Path to acoustic dsconfig.yaml");
     program.add_argument("--vocoder-config").help("Path to vocoder.yaml");
+    program.add_argument("--spk").default_value(std::string())
+            .help(R"(Speaker Mixture (e.g. "name" or "name1|name2" or "name1:0.25|name2:0.75"))");
     program.add_argument("--title").help("Output Audio File Title");
     program.add_argument("--speedup").scan<'i', int>().default_value(10).help("PNDM speedup ratio");
 
@@ -49,6 +52,7 @@ int main(int argc, char *argv[]) {
     auto dsPath = program.get("--ds-file");
     auto dsConfigPath = program.get("--acoustic-config");
     auto vocoderConfigPath = program.get("--vocoder-config");
+    auto spkMixStr = program.get("--spk");
     auto outputAudioTitle = program.get("--title");
     auto speedup = program.get<int>("--speedup");
     if (speedup < 1 || speedup > 1000) {
@@ -61,9 +65,10 @@ int main(int argc, char *argv[]) {
                     MBStringToWString(dsConfigPath, currentCodePage),
                     MBStringToWString(vocoderConfigPath, currentCodePage),
                     MBStringToWString(outputAudioTitle, currentCodePage),
+                    spkMixStr,
                     speedup);
 #else
-    diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, speedup);
+    diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, spkMixStr, speedup);
 #endif
 
     return 0;
@@ -75,6 +80,7 @@ namespace diffsinger {
              const TString &dsConfigPath,
              const TString &vocoderConfigPath,
              const TString &outputWavePath,
+             const std::string &spkMixStr,
              int acousticSpeedup) {
 
         // Get the available providers
@@ -86,7 +92,7 @@ namespace diffsinger {
             std::cout << provider << std::endl;
         }
 
-        auto dsProject = loadDsProject(dsFilePath);
+        auto dsProject = loadDsProject(dsFilePath, spkMixStr);
 
         auto dsConfig = DsConfig::fromYAML(dsConfigPath);
         std::unordered_map<std::string, int64_t> name2token;
@@ -124,7 +130,7 @@ namespace diffsinger {
             auto waveform = diffsinger::vocoderInfer(vocoderConfig.model, mel, pd.f0);
 
             std::basic_stringstream<TChar> ss;
-            ss << outputWavePath << DS_T("_") << i << DS_T(".wav");
+            ss << outputWavePath << DS_T("_") << (i + 1) << DS_T(".wav");
             SndfileHandle audioFile(ss.str().c_str(), SFM_WRITE, SF_FORMAT_WAV | SF_FORMAT_FLOAT, 1, sampleRate);
             auto numFrames = static_cast<sf_count_t>(waveform.size());
             audioFile.write(waveform.data(), numFrames);

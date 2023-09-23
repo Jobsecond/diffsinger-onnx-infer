@@ -100,11 +100,12 @@ namespace diffsinger {
         bool supportsEnergy = supportedInputNames.find("energy") != supportedInputNames.end();
         bool supportsBreathiness = supportedInputNames.find("breathiness") != supportedInputNames.end();
 
-        std::cout << "Velocity: " << (supportsVelocity ? "Yes" : "No") << "\n";
-        std::cout << "Gender: " << (supportsGender ? "Yes" : "No") << "\n";
-        std::cout << "Speakers: " << (supportsSpeakers ? "Yes" : "No") << "\n";
-        std::cout << "Energy: " << (supportsEnergy ? "Yes" : "No") << "\n";
-        std::cout << "Breathiness: " << (supportsBreathiness ? "Yes" : "No") << "\n";
+        std::cout << "Supported features:\n";
+        std::cout << "Velocity=" << (supportsVelocity ? "Yes" : "No") << "; ";
+        std::cout << "Gender=" << (supportsGender ? "Yes" : "No") << "; ";
+        std::cout << "Speakers=" << (supportsSpeakers ? "Yes" : "No") << "; ";
+        std::cout << "Energy=" << (supportsEnergy ? "Yes" : "No") << "; ";
+        std::cout << "Breathiness=" << (supportsBreathiness ? "Yes" : "No") << "\n";
 
         // tokens
         appendVectorToInputTensors<int64_t, int64_t>("tokens", pd.tokens, inputNames, inputTensors);

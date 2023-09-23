@@ -56,21 +56,24 @@ namespace diffsinger {
                 // Use the first one by default.
                 auto emb = dsConfig.spkEmb.getMixedEmb({{dsConfig.speakers[0], 1.0}});
                 for (size_t i = 0; i < spkEmbedArraySize; ++i) {
-                    pd.spk_embed[i] = emb[i / targetLength];
+                    pd.spk_embed[i] = emb[i % SPK_EMBED_SIZE];
                 }
             } else {
-                auto spkMix = dsSegment.spk_mix.resample(frameLength, targetLength);
+                auto spkMixResampled = dsSegment.spk_mix.resample(frameLength, targetLength);
                 for (int64_t i = 0; i < targetLength; ++i) {
                     std::unordered_map<std::string, double> mix;
                     int64_t speakerIndex = 0;
-                    for (const auto &speakerItem : dsSegment.spk_mix.spk) {
+                    for (const auto &speakerItem : spkMixResampled.spk) {
                         // If SampleCurve::resample guarantees the size of returned array is at least `targetLength`,
                         // subscripting will not go out of range here.
                         mix[speakerItem.first] = speakerItem.second.samples[i];
                         ++speakerIndex;
                     }
                     auto emb = dsConfig.spkEmb.getMixedEmb(mix);
-                    pd.spk_embed[i] = emb[i / speakerIndex / SPK_EMBED_SIZE];  // TODO: need to validate
+                    int64_t y = i * SPK_EMBED_SIZE;
+                    for (int64_t j = 0; j < SPK_EMBED_SIZE; ++j) {
+                        pd.spk_embed[y + j] = emb[j];
+                    }
                 }
             }
         }
