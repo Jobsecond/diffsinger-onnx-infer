@@ -32,6 +32,7 @@ namespace diffsinger {
     private:
         TString m_modelPath;
         Ort::Session m_session;
+        Ort::Env m_env;
         OrtApi const& ortApi; // Uses ORT_API_VERSION
     };
 

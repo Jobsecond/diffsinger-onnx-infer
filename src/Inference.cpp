@@ -46,7 +46,8 @@ namespace diffsinger {
     /* IMPLEMENTATION BELOW */
 
     AcousticInference::AcousticInference(const TString &modelPath)
-            : m_modelPath(modelPath), m_session(nullptr), ortApi(Ort::GetApi()) {}
+            : m_modelPath(modelPath), m_session(nullptr), ortApi(Ort::GetApi()),
+              m_env(ORT_LOGGING_LEVEL_ERROR, "DiffSinger"){}
 
     TString AcousticInference::getModelPath() {
         return m_modelPath;
@@ -65,8 +66,7 @@ namespace diffsinger {
         }
 
         //options.AppendExecutionProvider_CUDA(options1);
-        Ort::Env env(/*ORT_LOGGING_LEVEL_WARNING*/ ORT_LOGGING_LEVEL_ERROR, "DiffSinger");
-        m_session = Ort::Session(env, m_modelPath.c_str(), options);
+        m_session = Ort::Session(m_env, m_modelPath.c_str(), options);
     }
 
     Ort::Value AcousticInference::inferToOrtValue(const PreprocessedData &pd, const InferenceSettings &inferSettings) {

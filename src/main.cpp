@@ -31,7 +31,9 @@ namespace diffsinger {
              int deviceIndex = 0);
 }
 
+#ifdef WIN32
 using diffsinger::MBStringToWString;
+#endif
 
 int main(int argc, char *argv[]) {
 
@@ -74,7 +76,7 @@ int main(int argc, char *argv[]) {
                     depth,
                     deviceIndex);
 #else
-    diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, spkMixStr, speedup, depth);
+    diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, spkMixStr, speedup, depth, deviceIndex);
 #endif
 
     return 0;
