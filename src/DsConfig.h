@@ -47,10 +47,12 @@ namespace diffsinger {
         int hiddenSize = 256;
         int hopSize = 512;
         int sampleRate = 44100;
+        int maxDepth = -1;
         bool useKeyShiftEmbed = false;
         bool useSpeedEmbed = false;
         bool useEnergyEmbed = false;
         bool useBreathinessEmbed = false;
+        bool useShallowDiffusion = false;
 
         static DsConfig fromYAML(const TString &dsConfigPath, bool *ok = nullptr);
     };

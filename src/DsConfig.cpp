@@ -68,6 +68,14 @@ namespace diffsinger {
             dsConfig.useBreathinessEmbed = config["use_breathiness_embed"].as<bool>();
         }
 
+        if (config["use_shallow_diffusion"]) {
+            dsConfig.useShallowDiffusion = config["use_shallow_diffusion"].as<bool>();
+        }
+
+        if (config["max_depth"]) {
+            dsConfig.maxDepth = config["max_depth"].as<int>();
+        }
+
         if (config["speakers"]) {
             dsConfig.speakers = config["speakers"].as<std::vector<std::string>>();
             dsConfig.spkEmb.loadSpeakers(dsConfig.speakers, dsConfigDir);

@@ -26,7 +26,9 @@ namespace diffsinger {
              const TString &vocoderConfigPath,
              const TString &outputWavePath,
              const std::string &spkMixStr = "",
-             int acousticSpeedup = 10);
+             int acousticSpeedup = 10,
+             int shallowDiffusionDepth = 1000,
+             int deviceIndex = 0);
 }
 
 using diffsinger::MBStringToWString;
@@ -41,6 +43,8 @@ int main(int argc, char *argv[]) {
             .help(R"(Speaker Mixture (e.g. "name" or "name1|name2" or "name1:0.25|name2:0.75"))");
     program.add_argument("--out").required().help("Output Audio Filename (*.wav)");
     program.add_argument("--speedup").scan<'i', int>().default_value(10).help("PNDM speedup ratio");
+    program.add_argument("--depth").scan<'i', int>().default_value(1000).help("Shallow diffusion depth (needs acoustic model support)");
+    program.add_argument("--device-index").scan<'i', int>().default_value(0).help("GPU device index");
 
     try {
         program.parse_args(argc, argv);
@@ -56,9 +60,8 @@ int main(int argc, char *argv[]) {
     auto spkMixStr = program.get("--spk");
     auto outputAudioTitle = program.get("--out");
     auto speedup = program.get<int>("--speedup");
-    if (speedup < 1 || speedup > 1000) {
-        speedup = 10;
-    }
+    auto depth = program.get<int>("--depth");
+    auto deviceIndex = program.get<int>("--device-index");
 
 #ifdef WIN32
     auto currentCodePage = ::GetACP();
@@ -67,9 +70,11 @@ int main(int argc, char *argv[]) {
                     MBStringToWString(vocoderConfigPath, currentCodePage),
                     MBStringToWString(outputAudioTitle, currentCodePage),
                     spkMixStr,
-                    speedup);
+                    speedup,
+                    depth,
+                    deviceIndex);
 #else
-    diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, spkMixStr, speedup);
+    diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, spkMixStr, speedup, depth);
 #endif
 
     return 0;
@@ -82,7 +87,9 @@ namespace diffsinger {
              const TString &vocoderConfigPath,
              const TString &outputWavePath,
              const std::string &spkMixStr,
-             int acousticSpeedup) {
+             int acousticSpeedup,
+             int shallowDiffusionDepth,
+             int deviceIndex) {
 
         // Get the available providers
         auto availableProviders = Ort::GetAvailableProviders();
@@ -93,9 +100,25 @@ namespace diffsinger {
             std::cout << provider << std::endl;
         }
 
-        auto dsProject = loadDsProject(dsFilePath, spkMixStr);
-
         auto dsConfig = DsConfig::fromYAML(dsConfigPath);
+
+        if (acousticSpeedup < 1 || acousticSpeedup > 1000) {
+            std::cout << "WARNING: speedup must be in range [1, 1000]. Falling back to 10.\n";
+            acousticSpeedup = 10;
+        }
+
+        if (dsConfig.useShallowDiffusion) {
+            if (dsConfig.maxDepth < 0) {
+                std::cout << "ERROR: max_depth is unset or negative in acoustic configuration.\n";
+                return;
+            }
+            if (shallowDiffusionDepth > dsConfig.maxDepth) {
+                shallowDiffusionDepth = dsConfig.maxDepth;
+            }
+            // make sure depth can be divided by speedup
+            shallowDiffusionDepth = shallowDiffusionDepth / acousticSpeedup * acousticSpeedup;
+        }
+
         std::unordered_map<std::string, int64_t> name2token;
         std::string line;
         std::ifstream phonemesFile(dsConfig.phonemes);
@@ -111,13 +134,19 @@ namespace diffsinger {
         int sampleRate = vocoderConfig.sampleRate;
         int hopSize = vocoderConfig.hopSize;
         double frameLength = 1.0 * hopSize / sampleRate;
+
+        auto dsProject = loadDsProject(dsFilePath, spkMixStr);
         size_t numSegments = dsProject.size();
 
         AcousticInference acousticInference(dsConfig.acoustic);
-        acousticInference.initSession(true);
+        acousticInference.initSession(true, deviceIndex);
 
         std::vector< std::pair<int64_t, std::vector<float>> > waveformArr{};
         waveformArr.reserve(numSegments);
+
+        InferenceSettings inferSettings{};
+        inferSettings.speedup = acousticSpeedup;
+        inferSettings.depth = shallowDiffusionDepth;
 
         for (size_t i = 0; i < numSegments; i++) {
             std::cout << i + 1 << " of " << numSegments << "\n";
@@ -127,7 +156,7 @@ namespace diffsinger {
             auto pd = acousticPreprocess(name2token, dsProject[i], dsConfig, frameLength);
 
             std::cout << "Mel" << "\n";
-            auto mel = acousticInference.inferToOrtValue(pd, acousticSpeedup);
+            auto mel = acousticInference.inferToOrtValue(pd, inferSettings);
 
             if (mel == Ort::Value(nullptr)) {
                 std::cout << "ERROR: Acoustic Infer failed.\n";

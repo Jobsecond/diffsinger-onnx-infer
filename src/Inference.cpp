@@ -41,6 +41,8 @@ namespace diffsinger {
                                            std::vector<const char *> &inputNames,
                                            std::vector<Ort::Value> &inputTensors);
 
+    inline bool hasKey(const std::unordered_set<std::string> &container, const std::string &key);
+
     /* IMPLEMENTATION BELOW */
 
     AcousticInference::AcousticInference(const TString &modelPath)
@@ -50,7 +52,7 @@ namespace diffsinger {
         return m_modelPath;
     }
 
-    void AcousticInference::initSession(bool useDml) {
+    void AcousticInference::initSession(bool useDml, int deviceIndex) {
         auto options = Ort::SessionOptions();
         if (useDml) {
             const OrtDmlApi *ortDmlApi;
@@ -59,7 +61,7 @@ namespace diffsinger {
             options.DisableMemPattern();
             options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
 
-            ortDmlApi->SessionOptionsAppendExecutionProvider_DML(options, /*device index*/ 0);
+            ortDmlApi->SessionOptionsAppendExecutionProvider_DML(options, deviceIndex);
         }
 
         //options.AppendExecutionProvider_CUDA(options1);
@@ -67,7 +69,7 @@ namespace diffsinger {
         m_session = Ort::Session(env, m_modelPath.c_str(), options);
     }
 
-    Ort::Value AcousticInference::inferToOrtValue(const PreprocessedData &pd, int speedup) {
+    Ort::Value AcousticInference::inferToOrtValue(const PreprocessedData &pd, const InferenceSettings &inferSettings) {
         if (!m_session) {
             std::cout << "Session is not initialized!\n";
             return Ort::Value(nullptr);
@@ -82,30 +84,32 @@ namespace diffsinger {
         // Basic validation
         bool isValidModel = true;
         // Required input names
-        isValidModel &= (supportedInputNames.find("tokens") != supportedInputNames.end());
-        isValidModel &= (supportedInputNames.find("durations") != supportedInputNames.end());
-        isValidModel &= (supportedInputNames.find("f0") != supportedInputNames.end());
-        isValidModel &= (supportedInputNames.find("speedup") != supportedInputNames.end());
+        isValidModel &= hasKey(supportedInputNames, "tokens");
+        isValidModel &= hasKey(supportedInputNames, "durations");
+        isValidModel &= hasKey(supportedInputNames, "f0");
+        isValidModel &= hasKey(supportedInputNames, "speedup");
         // Required Output names
-        isValidModel &= (supportedOutputNames.find("mel") != supportedOutputNames.end());
+        isValidModel &= hasKey(supportedOutputNames, "mel");
         isValidModel &= (supportedOutputNames.size() == 1);
         if (!isValidModel) {
             return Ort::Value(nullptr);
         }
 
         // Parameters that the model may support
-        bool supportsVelocity = supportedInputNames.find("velocity") != supportedInputNames.end();
-        bool supportsGender = supportedInputNames.find("gender") != supportedInputNames.end();
-        bool supportsSpeakers = supportedInputNames.find("spk_embed") != supportedInputNames.end();
-        bool supportsEnergy = supportedInputNames.find("energy") != supportedInputNames.end();
-        bool supportsBreathiness = supportedInputNames.find("breathiness") != supportedInputNames.end();
+        bool supportsVelocity = hasKey(supportedInputNames, "velocity");
+        bool supportsGender = hasKey(supportedInputNames, "gender");
+        bool supportsSpeakers = hasKey(supportedInputNames, "spk_embed");
+        bool supportsEnergy = hasKey(supportedInputNames, "energy");
+        bool supportsBreathiness = hasKey(supportedInputNames, "breathiness");
+        bool supportsShallowDiffusion = hasKey(supportedInputNames, "depth");
 
         std::cout << "Supported features:\n";
         std::cout << "Velocity=" << (supportsVelocity ? "Yes" : "No") << "; ";
         std::cout << "Gender=" << (supportsGender ? "Yes" : "No") << "; ";
         std::cout << "Speakers=" << (supportsSpeakers ? "Yes" : "No") << "; ";
         std::cout << "Energy=" << (supportsEnergy ? "Yes" : "No") << "; ";
-        std::cout << "Breathiness=" << (supportsBreathiness ? "Yes" : "No") << "\n";
+        std::cout << "Breathiness=" << (supportsBreathiness ? "Yes" : "No") << "; ";
+        std::cout << "Shallow_Diffusion=" << (supportsShallowDiffusion ? "Yes" : "No") << "\n";
 
         // tokens
         appendVectorToInputTensors<int64_t, int64_t>("tokens", pd.tokens, inputNames, inputTensors);
@@ -114,7 +118,8 @@ namespace diffsinger {
         // F0
         appendVectorToInputTensors<double, float>("f0", pd.f0, inputNames, inputTensors);
         // Speedup
-        appendScalarToInputTensors<int64_t, int64_t>("speedup", speedup, inputNames, inputTensors);
+        appendScalarToInputTensors<decltype(inferSettings.speedup), int64_t>(
+                "speedup", inferSettings.speedup, inputNames, inputTensors);
         // Velocity
         if (supportsVelocity) {
             appendVectorToInputTensors<double, float>("velocity", pd.velocity, inputNames, inputTensors);
@@ -153,6 +158,17 @@ namespace diffsinger {
         if (isVarianceError) {
             return Ort::Value(nullptr);
         }
+
+        // Shallow Diffusion depth
+        if (supportsShallowDiffusion) {
+            if (inferSettings.depth < 0) {
+                std::cout << "ERROR: The model supports shallow diffusion, but depth is unset or negative.\n";
+                return Ort::Value(nullptr);
+            }
+            appendScalarToInputTensors<decltype(inferSettings.depth), int64_t>(
+                    "depth", inferSettings.depth, inputNames, inputTensors);
+        }
+
         // Create output names
         const char *outputNames[] = { "mel" };
         auto outputNamesSize = sizeof(outputNames) / sizeof(outputNames[0]);
@@ -178,8 +194,8 @@ namespace diffsinger {
         return output;
     }
 
-    std::vector<float> AcousticInference::infer(const PreprocessedData &pd, int speedup) {
-        return ortValueToVector(inferToOrtValue(pd, speedup));
+    std::vector<float> AcousticInference::infer(const PreprocessedData &pd, const InferenceSettings &inferSettings) {
+        return ortValueToVector(inferToOrtValue(pd, inferSettings));
     }
 
     bool AcousticInference::hasSession() {
@@ -324,5 +340,9 @@ namespace diffsinger {
         inputNames.push_back(inputName);
         auto inputTensor = scalarToTensor<T_scalar, T_tensor>(scalar);
         inputTensors.push_back(std::move(inputTensor));
+    }
+
+    bool hasKey(const std::unordered_set<std::string> &container, const std::string &key) {
+        return container.find(key) != container.end();
     }
 }
