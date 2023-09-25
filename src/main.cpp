@@ -28,6 +28,7 @@ namespace diffsinger {
              const std::string &spkMixStr = "",
              int acousticSpeedup = 10,
              int shallowDiffusionDepth = 1000,
+             bool cpuOnly = false,
              int deviceIndex = 0);
 }
 
@@ -46,6 +47,7 @@ int main(int argc, char *argv[]) {
     program.add_argument("--out").required().help("Output Audio Filename (*.wav)");
     program.add_argument("--speedup").scan<'i', int>().default_value(10).help("PNDM speedup ratio");
     program.add_argument("--depth").scan<'i', int>().default_value(1000).help("Shallow diffusion depth (needs acoustic model support)");
+    program.add_argument("--cpu-only").default_value(false).implicit_value(true).help("Use CPU for audio inference");
     program.add_argument("--device-index").scan<'i', int>().default_value(0).help("GPU device index");
 
     try {
@@ -63,6 +65,7 @@ int main(int argc, char *argv[]) {
     auto outputAudioTitle = program.get("--out");
     auto speedup = program.get<int>("--speedup");
     auto depth = program.get<int>("--depth");
+    auto cpuOnly = program.get<bool>("--cpu-only");
     auto deviceIndex = program.get<int>("--device-index");
 
 #ifdef WIN32
@@ -74,9 +77,10 @@ int main(int argc, char *argv[]) {
                     spkMixStr,
                     speedup,
                     depth,
+                    cpuOnly,
                     deviceIndex);
 #else
-    diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, spkMixStr, speedup, depth, deviceIndex);
+    diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, spkMixStr, speedup, depth, cpuOnly, deviceIndex);
 #endif
 
     return 0;
@@ -91,6 +95,7 @@ namespace diffsinger {
              const std::string &spkMixStr,
              int acousticSpeedup,
              int shallowDiffusionDepth,
+             bool cpuOnly,
              int deviceIndex) {
 
         // Get the available providers
@@ -141,7 +146,11 @@ namespace diffsinger {
         size_t numSegments = dsProject.size();
 
         AcousticInference acousticInference(dsConfig.acoustic);
-        acousticInference.initSession(true, deviceIndex);
+        bool isSessionInitOk = acousticInference.initSession(!cpuOnly, deviceIndex);
+        if (!isSessionInitOk) {
+            std::cout << "ERROR: Session initialization failed.\n";
+            return;
+        }
 
         std::vector< std::pair<int64_t, std::vector<float>> > waveformArr{};
         waveformArr.reserve(numSegments);
@@ -192,6 +201,9 @@ namespace diffsinger {
 
         SndfileHandle audioFile(outputWavePath.c_str(), SFM_WRITE, SF_FORMAT_WAV | SF_FORMAT_FLOAT, 1, sampleRate);
         auto numFrames = static_cast<sf_count_t>(wavBuffer.size());
-        audioFile.write(wavBuffer.data(), numFrames);
+        auto numWritten = audioFile.write(wavBuffer.data(), numFrames);
+        if ((audioFile.error() != SF_ERR_NO_ERROR) || (numWritten == 0)) {
+            std::cout << "ERROR: audio write failed. Reason: " << audioFile.strError() << '\n';
+        }
     }
 }

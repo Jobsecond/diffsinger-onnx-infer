@@ -3,7 +3,9 @@
 
 ## Command Line Options
 ```
-Usage: ds_onnx_infer [-h] --ds-file VAR --acoustic-config VAR --vocoder-config VAR [--spk VAR] --out VAR [--speedup VAR]
+Usage: ds_onnx_infer [-h] --ds-file VAR --acoustic-config VAR --vocoder-config VAR
+       [--spk VAR] --out VAR [--speedup VAR] [--depth VAR]
+       [--cpu-only] [--device-index VAR]
 
 Optional arguments:
   -h, --help            shows help message and exits
@@ -11,9 +13,13 @@ Optional arguments:
   --ds-file             Path to .ds file [required]
   --acoustic-config     Path to acoustic dsconfig.yaml [required]
   --vocoder-config      Path to vocoder.yaml [required]
-  --spk                 Speaker Mixture (e.g. "name" or "name1|name2" or "name1:0.25|name2:0.75") [default: ""]
+  --spk                 Speaker Mixture (e.g. "name" or "name1|name2" or "name1:0.25|name2:0.75")
+                        [default: ""]
   --out                 Output Audio Filename (*.wav) [required]
   --speedup             PNDM speedup ratio [default: 10]
+  --depth               Shallow diffusion depth (needs acoustic model support) [default: 1000]
+  --cpu-only            Use CPU for audio inference
+  --device-index        GPU device index [default: 0]
 ```
 
 ## Build instructions

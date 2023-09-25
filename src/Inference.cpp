@@ -43,31 +43,43 @@ namespace diffsinger {
 
     inline bool hasKey(const std::unordered_set<std::string> &container, const std::string &key);
 
+    inline void printOrtError(const Ort::Exception &err);
+
     /* IMPLEMENTATION BELOW */
 
     AcousticInference::AcousticInference(const TString &modelPath)
             : m_modelPath(modelPath), m_session(nullptr), ortApi(Ort::GetApi()),
-              m_env(ORT_LOGGING_LEVEL_ERROR, "DiffSinger"){}
+              m_env(ORT_LOGGING_LEVEL_ERROR, "DiffSinger"),
+              m_modelFlags() {}
 
     TString AcousticInference::getModelPath() {
         return m_modelPath;
     }
 
-    void AcousticInference::initSession(bool useDml, int deviceIndex) {
-        auto options = Ort::SessionOptions();
-        if (useDml) {
-            const OrtDmlApi *ortDmlApi;
-            ortApi.GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void **>(&ortDmlApi));
+    bool AcousticInference::initSession(bool useDml, int deviceIndex) {
+        m_modelFlags.reset();
+        try {
+            auto options = Ort::SessionOptions();
+            if (useDml) {
+                const OrtDmlApi *ortDmlApi;
+                ortApi.GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void **>(&ortDmlApi));
 
-            options.DisableMemPattern();
-            options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+                options.DisableMemPattern();
+                options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
 
-            ortDmlApi->SessionOptionsAppendExecutionProvider_DML(options, deviceIndex);
+                ortDmlApi->SessionOptionsAppendExecutionProvider_DML(options, deviceIndex);
+            }
+
+            //options.AppendExecutionProvider_CUDA(options1);
+            m_session = Ort::Session(m_env, m_modelPath.c_str(), options);
+            return true;
         }
-
-        //options.AppendExecutionProvider_CUDA(options1);
-        m_session = Ort::Session(m_env, m_modelPath.c_str(), options);
+        catch (const Ort::Exception &ortException) {
+            printOrtError(ortException);
+        }
+        return false;
     }
+
 
     Ort::Value AcousticInference::inferToOrtValue(const PreprocessedData &pd, const InferenceSettings &inferSettings) {
         if (!m_session) {
@@ -82,6 +94,7 @@ namespace diffsinger {
         auto supportedOutputNames = getSupportedOutputNames(m_session);
 
         // Basic validation
+        m_modelFlags.unset(AcousticModelFlags::Valid);
         bool isValidModel = true;
         // Required input names
         isValidModel &= hasKey(supportedInputNames, "tokens");
@@ -94,22 +107,29 @@ namespace diffsinger {
         if (!isValidModel) {
             return Ort::Value(nullptr);
         }
+        m_modelFlags.set(AcousticModelFlags::Valid);
 
         // Parameters that the model may support
-        bool supportsVelocity = hasKey(supportedInputNames, "velocity");
-        bool supportsGender = hasKey(supportedInputNames, "gender");
-        bool supportsSpeakers = hasKey(supportedInputNames, "spk_embed");
-        bool supportsEnergy = hasKey(supportedInputNames, "energy");
-        bool supportsBreathiness = hasKey(supportedInputNames, "breathiness");
-        bool supportsShallowDiffusion = hasKey(supportedInputNames, "depth");
+        m_modelFlags.setIf(AcousticModelFlags::Velocity, hasKey(supportedInputNames, "velocity"));
+        m_modelFlags.setIf(AcousticModelFlags::Gender, hasKey(supportedInputNames, "gender"));
+        m_modelFlags.setIf(AcousticModelFlags::MultiSpeakers, hasKey(supportedInputNames, "spk_embed"));
+        m_modelFlags.setIf(AcousticModelFlags::Energy, hasKey(supportedInputNames, "energy"));
+        m_modelFlags.setIf(AcousticModelFlags::Breathiness, hasKey(supportedInputNames, "breathiness"));
+        m_modelFlags.setIf(AcousticModelFlags::ShallowDiffusion, hasKey(supportedInputNames, "depth"));
 
-        std::cout << "Supported features:\n";
-        std::cout << "Velocity=" << (supportsVelocity ? "Yes" : "No") << "; ";
-        std::cout << "Gender=" << (supportsGender ? "Yes" : "No") << "; ";
-        std::cout << "Speakers=" << (supportsSpeakers ? "Yes" : "No") << "; ";
-        std::cout << "Energy=" << (supportsEnergy ? "Yes" : "No") << "; ";
-        std::cout << "Breathiness=" << (supportsBreathiness ? "Yes" : "No") << "; ";
-        std::cout << "Shallow_Diffusion=" << (supportsShallowDiffusion ? "Yes" : "No") << "\n";
+        std::cout << "Supported features:\n"
+                  << "Velocity="
+                  << (m_modelFlags.check(AcousticModelFlags::Velocity) ? "Yes" : "No") << "; "
+                  << "Gender="
+                  << (m_modelFlags.check(AcousticModelFlags::Gender) ? "Yes" : "No") << "; "
+                  << "Multi_Speakers="
+                  << (m_modelFlags.check(AcousticModelFlags::MultiSpeakers) ? "Yes" : "No") << "; "
+                  << "Energy="
+                  << (m_modelFlags.check(AcousticModelFlags::Energy) ? "Yes" : "No") << "; "
+                  << "Breathiness="
+                  << (m_modelFlags.check(AcousticModelFlags::Breathiness) ? "Yes" : "No") << "; "
+                  << "Shallow_Diffusion="
+                  << (m_modelFlags.check(AcousticModelFlags::ShallowDiffusion) ? "Yes" : "No") << '\n';
 
         // tokens
         appendVectorToInputTensors<int64_t, int64_t>("tokens", pd.tokens, inputNames, inputTensors);
@@ -121,15 +141,15 @@ namespace diffsinger {
         appendScalarToInputTensors<decltype(inferSettings.speedup), int64_t>(
                 "speedup", inferSettings.speedup, inputNames, inputTensors);
         // Velocity
-        if (supportsVelocity) {
+        if (m_modelFlags.check(AcousticModelFlags::Velocity)) {
             appendVectorToInputTensors<double, float>("velocity", pd.velocity, inputNames, inputTensors);
         }
         // Gender
-        if (supportsGender) {
+        if (m_modelFlags.check(AcousticModelFlags::Gender)) {
             appendVectorToInputTensors<double, float>("gender", pd.gender, inputNames, inputTensors);
         }
         // Speakers Embed
-        if (supportsSpeakers) {
+        if (m_modelFlags.check(AcousticModelFlags::MultiSpeakers)) {
             auto spkEmbedFrames = static_cast<int64_t>(pd.spk_embed.size()) / spkEmbedLastDimension;
             appendVectorToInputTensorsWithShape<float, float>("spk_embed", pd.spk_embed,
                                                                {1, spkEmbedFrames, spkEmbedLastDimension},
@@ -139,7 +159,7 @@ namespace diffsinger {
         //       they should be inferred by the variance model.
         bool isVarianceError = false;
         // Energy
-        if (supportsEnergy) {
+        if (m_modelFlags.check(AcousticModelFlags::Energy)) {
             if (pd.energy.empty()) {
                 std::cout << "ERROR: The acoustic model required energy input, but such parameter is not supplied.\n";
                 isVarianceError = true;
@@ -147,7 +167,7 @@ namespace diffsinger {
             appendVectorToInputTensors<double, float>("energy", pd.energy, inputNames, inputTensors);
         }
         // Breathiness
-        if (supportsBreathiness) {
+        if (m_modelFlags.check(AcousticModelFlags::Breathiness)) {
             if (pd.breathiness.empty()) {
                 std::cout << "ERROR: The acoustic model required breathiness input, but such parameter is not supplied.\n";
                 isVarianceError = true;
@@ -160,7 +180,7 @@ namespace diffsinger {
         }
 
         // Shallow Diffusion depth
-        if (supportsShallowDiffusion) {
+        if (m_modelFlags.check(AcousticModelFlags::ShallowDiffusion)) {
             if (inferSettings.depth < 0) {
                 std::cout << "ERROR: The model supports shallow diffusion, but depth is unset or negative.\n";
                 return Ort::Value(nullptr);
@@ -173,19 +193,25 @@ namespace diffsinger {
         const char *outputNames[] = { "mel" };
         auto outputNamesSize = sizeof(outputNames) / sizeof(outputNames[0]);
 
-        // Run the session
-        auto outputTensors = m_session.Run(
-                Ort::RunOptions{},
-                inputNames.data(),
-                inputTensors.data(),
-                inputNames.size(),
-                outputNames,
-                outputNamesSize);
+        try {
+            // Run the session
+            auto outputTensors = m_session.Run(
+                    Ort::RunOptions{},
+                    inputNames.data(),
+                    inputTensors.data(),
+                    inputNames.size(),
+                    outputNames,
+                    outputNamesSize);
 
-        // Get the output tensor
-        Ort::Value &outputTensor = outputTensors[0];
+            // Get the output tensor
+            Ort::Value &outputTensor = outputTensors[0];
 
-        return std::move(outputTensor);
+            return std::move(outputTensor);
+        }
+        catch (const Ort::Exception &ortException) {
+            printOrtError(ortException);
+            return Ort::Value(nullptr);
+        }
     }
 
     std::vector<float> AcousticInference::ortValueToVector(const Ort::Value &value) {
@@ -203,8 +229,11 @@ namespace diffsinger {
     }
 
     void AcousticInference::endSession() {
-        Ort::Session emptySession(nullptr);
-        std::swap(m_session, emptySession);
+        {
+            Ort::Session emptySession(nullptr);
+            std::swap(m_session, emptySession);
+        }
+        m_modelFlags.reset();
     }
 
 
@@ -344,5 +373,11 @@ namespace diffsinger {
 
     bool hasKey(const std::unordered_set<std::string> &container, const std::string &key) {
         return container.find(key) != container.end();
+    }
+
+    void printOrtError(const Ort::Exception &err) {
+        std::cout << "[ONNXRuntimeError] : "
+                  << err.GetOrtErrorCode() << " : "
+                  << err.what() << '\n';
     }
 }

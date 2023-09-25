@@ -9,6 +9,7 @@
 
 #include "TString.h"
 #include "ModelData.h"
+#include "InferenceFlags.h"
 
 namespace diffsinger {
 
@@ -22,7 +23,7 @@ namespace diffsinger {
     class AcousticInference {
     public:
         explicit AcousticInference(const TString &modelPath);
-        void initSession(bool useDml, int deviceIndex = 0);
+        bool initSession(bool useDml, int deviceIndex = 0);
         void endSession();
         bool hasSession();
         TString getModelPath();
@@ -34,6 +35,7 @@ namespace diffsinger {
         Ort::Session m_session;
         Ort::Env m_env;
         OrtApi const& ortApi; // Uses ORT_API_VERSION
+        AcousticModelFlags m_modelFlags;
     };
 
     class VocoderInference {
