@@ -2,6 +2,7 @@
 #define DS_ONNX_INFER_SPEAKEREMBED_H
 
 #include <array>
+#include <vector>
 #include <string>
 #include <unordered_map>
 

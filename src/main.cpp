@@ -132,6 +132,10 @@ namespace diffsinger {
 
         int64_t token = 0;
         while (std::getline(phonemesFile, line)) {
+            // handle CRLF line endings on Linux and macOS
+            if (!line.empty() && line[line.size() - 1] == '\r')
+                line.erase(line.size() - 1);
+
             name2token.emplace(line, token);
             ++token;
         }
