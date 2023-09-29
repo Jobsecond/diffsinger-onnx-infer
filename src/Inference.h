@@ -46,6 +46,8 @@ namespace diffsinger {
         Ort::Session m_session;
         OrtApi const &ortApi; // Uses ORT_API_VERSION
         AcousticModelFlags m_modelFlags;
+    private:
+        void checkModel();
     };
 
     class VocoderInference {

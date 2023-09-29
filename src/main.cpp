@@ -1,7 +1,9 @@
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <cctype>
 #include <filesystem>
+#include <chrono>
 #include <utility>
 
 #include <onnxruntime_cxx_api.h>
@@ -33,6 +35,7 @@ namespace diffsinger {
              int deviceIndex = 0);
 
     ExecutionProvider parseEPFromString(const std::string &ep);
+    std::string millisecondsToSecondsString(long long milliseconds);
 }
 
 #ifdef WIN32
@@ -117,19 +120,19 @@ namespace diffsinger {
         // Print the available providers
         std::cout << "Available Providers:" << std::endl;
         for (const auto &provider: availableProviders) {
-            std::cout << provider << std::endl;
+            std::cout << '-' << ' ' << provider << std::endl;
         }
 
         auto dsConfig = DsConfig::fromYAML(dsConfigPath);
 
         if (acousticSpeedup < 1 || acousticSpeedup > 1000) {
-            std::cout << "WARNING: speedup must be in range [1, 1000]. Falling back to 10.\n";
+            std::cout << "!! WARNING: speedup must be in range [1, 1000]. Falling back to 10.\n";
             acousticSpeedup = 10;
         }
 
         if (dsConfig.useShallowDiffusion) {
             if (dsConfig.maxDepth < 0) {
-                std::cout << "ERROR: max_depth is unset or negative in acoustic configuration.\n";
+                std::cout << "!! ERROR: max_depth is unset or negative in acoustic configuration.\n";
                 return;
             }
             if (shallowDiffusionDepth > dsConfig.maxDepth) {
@@ -166,7 +169,7 @@ namespace diffsinger {
 
         bool isSessionInitOk = acousticInference.initSession(ep, deviceIndex);
         if (!isSessionInitOk) {
-            std::cout << "ERROR: Session initialization failed.\n";
+            std::cout << "!! ERROR: Session initialization failed.\n";
             return;
         }
 
@@ -179,27 +182,31 @@ namespace diffsinger {
 
         for (size_t i = 0; i < numSegments; i++) {
             std::cout << i + 1 << " of " << numSegments << "\n";
-            std::cout << "Preprocessing input" << "\n";
+            auto timeStart = std::chrono::steady_clock::now();
+            std::cout << ">> Preprocessing input" << "\n";
             auto offsetInSamples = static_cast<int64_t>(std::ceil(dsProject[i].offset * vocoderConfig.sampleRate));
 
             auto pd = acousticPreprocess(name2token, dsProject[i], dsConfig, frameLength);
 
-            std::cout << "Mel" << "\n";
+            std::cout << ">> Acoustic infer -> Mel" << "\n";
             auto mel = acousticInference.inferToOrtValue(pd, inferSettings);
 
             if (mel == Ort::Value(nullptr)) {
-                std::cout << "ERROR: Acoustic Infer failed.\n";
+                std::cout << "!! ERROR: Acoustic Infer failed.\n";
                 waveformArr.emplace_back(offsetInSamples, std::vector<float>{});
                 continue;
             }
             // mel will be `std::move`d in the next steps, so it will not be usable after that.
-            std::cout << "Waveform" << "\n";
+            std::cout << ">> Vocoder infer -> Waveform" << "\n";
             auto waveform = vocoderInfer(vocoderConfig.model, mel, pd.f0);
 
             waveformArr.emplace_back(offsetInSamples, std::move(waveform));
+            auto timeEnd = std::chrono::steady_clock::now();
+            auto timeSpent = std::chrono::duration_cast<std::chrono::milliseconds>(timeEnd - timeStart).count();
+            std::cout << ">> Time Elapsed: " << millisecondsToSecondsString(timeSpent) << " seconds\n";
         }
 
-        std::cout << "Concatenating and saving wave file...\n";
+        std::cout << ">> Concatenating and saving wave file...\n";
         int64_t totalSamples = 0;
         for (const auto& [offsetInSamples, waveform] : waveformArr) {
             auto currentSamples = offsetInSamples + static_cast<int64_t>(waveform.size());
@@ -221,7 +228,7 @@ namespace diffsinger {
         auto numFrames = static_cast<sf_count_t>(wavBuffer.size());
         auto numWritten = audioFile.write(wavBuffer.data(), numFrames);
         if ((audioFile.error() != SF_ERR_NO_ERROR) || (numWritten == 0)) {
-            std::cout << "ERROR: audio write failed. Reason: " << audioFile.strError() << '\n';
+            std::cout << "!! ERROR: audio write failed. Reason: " << audioFile.strError() << '\n';
         }
     }
 
@@ -236,5 +243,23 @@ namespace diffsinger {
             return ExecutionProvider::DirectML;
         }
         return ExecutionProvider::CPU;
+    }
+
+    std::string millisecondsToSecondsString(long long milliseconds) {
+        auto integerPart = milliseconds / 1000;
+        auto decimalPart = milliseconds % 1000;
+        std::stringstream ss;
+        ss << integerPart << '.';
+        if (decimalPart < 100) {
+            ss << '0';
+        }
+        if (decimalPart < 10) {
+            ss << '0';
+        }
+        if (decimalPart == 0) {
+            ss << '0';
+        }
+        ss << decimalPart;
+        return ss.str();
     }
 }

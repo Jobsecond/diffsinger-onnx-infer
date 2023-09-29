@@ -144,6 +144,29 @@ namespace diffsinger {
 
             //options.AppendExecutionProvider_CUDA(options1);
             m_session = Ort::Session(m_env, m_modelPath.c_str(), options);
+            checkModel();
+            if (!m_modelFlags.check(AcousticModelFlags::Valid)) {
+                std::cout << "Invalid acoustic model!\n";
+                endSession();
+                return false;
+            }
+
+            std::cout << "Successfully created acoustic inference session.\n";
+
+            std::cout << "Acoustic Model supported features:\n"
+                      << "Velocity="
+                      << (m_modelFlags.check(AcousticModelFlags::Velocity) ? "Yes" : "No") << "; "
+                      << "Gender="
+                      << (m_modelFlags.check(AcousticModelFlags::Gender) ? "Yes" : "No") << "; "
+                      << "Multi_Speakers="
+                      << (m_modelFlags.check(AcousticModelFlags::MultiSpeakers) ? "Yes" : "No") << "; "
+                      << "Energy="
+                      << (m_modelFlags.check(AcousticModelFlags::Energy) ? "Yes" : "No") << "; "
+                      << "Breathiness="
+                      << (m_modelFlags.check(AcousticModelFlags::Breathiness) ? "Yes" : "No") << "; "
+                      << "Shallow_Diffusion="
+                      << (m_modelFlags.check(AcousticModelFlags::ShallowDiffusion) ? "Yes" : "No") << '\n';
+
             return true;
         }
         catch (const Ort::Exception &ortException) {
@@ -159,49 +182,13 @@ namespace diffsinger {
             return Ort::Value(nullptr);
         }
 
-        std::vector<const char *> inputNames;
-        std::vector<Ort::Value> inputTensors;
-
-        auto supportedInputNames = getSupportedInputNames(m_session);
-        auto supportedOutputNames = getSupportedOutputNames(m_session);
-
-        // Basic validation
-        m_modelFlags.unset(AcousticModelFlags::Valid);
-        bool isValidModel = true;
-        // Required input names
-        isValidModel &= hasKey(supportedInputNames, "tokens");
-        isValidModel &= hasKey(supportedInputNames, "durations");
-        isValidModel &= hasKey(supportedInputNames, "f0");
-        isValidModel &= hasKey(supportedInputNames, "speedup");
-        // Required Output names
-        isValidModel &= hasKey(supportedOutputNames, "mel");
-        isValidModel &= (supportedOutputNames.size() == 1);
-        if (!isValidModel) {
+        if (!m_modelFlags.check(AcousticModelFlags::Valid)) {
+            std::cout << "Invalid acoustic model!\n";
             return Ort::Value(nullptr);
         }
-        m_modelFlags.set(AcousticModelFlags::Valid);
 
-        // Parameters that the model may support
-        m_modelFlags.setIf(AcousticModelFlags::Velocity, hasKey(supportedInputNames, "velocity"));
-        m_modelFlags.setIf(AcousticModelFlags::Gender, hasKey(supportedInputNames, "gender"));
-        m_modelFlags.setIf(AcousticModelFlags::MultiSpeakers, hasKey(supportedInputNames, "spk_embed"));
-        m_modelFlags.setIf(AcousticModelFlags::Energy, hasKey(supportedInputNames, "energy"));
-        m_modelFlags.setIf(AcousticModelFlags::Breathiness, hasKey(supportedInputNames, "breathiness"));
-        m_modelFlags.setIf(AcousticModelFlags::ShallowDiffusion, hasKey(supportedInputNames, "depth"));
-
-        std::cout << "Supported features:\n"
-                  << "Velocity="
-                  << (m_modelFlags.check(AcousticModelFlags::Velocity) ? "Yes" : "No") << "; "
-                  << "Gender="
-                  << (m_modelFlags.check(AcousticModelFlags::Gender) ? "Yes" : "No") << "; "
-                  << "Multi_Speakers="
-                  << (m_modelFlags.check(AcousticModelFlags::MultiSpeakers) ? "Yes" : "No") << "; "
-                  << "Energy="
-                  << (m_modelFlags.check(AcousticModelFlags::Energy) ? "Yes" : "No") << "; "
-                  << "Breathiness="
-                  << (m_modelFlags.check(AcousticModelFlags::Breathiness) ? "Yes" : "No") << "; "
-                  << "Shallow_Diffusion="
-                  << (m_modelFlags.check(AcousticModelFlags::ShallowDiffusion) ? "Yes" : "No") << '\n';
+        std::vector<const char *> inputNames;
+        std::vector<Ort::Value> inputTensors;
 
         // tokens
         appendVectorToInputTensors<int64_t, int64_t>("tokens", pd.tokens, inputNames, inputTensors);
@@ -308,7 +295,38 @@ namespace diffsinger {
         m_modelFlags.reset();
     }
 
+    void AcousticInference::checkModel() {
+        m_modelFlags.reset();
+        if (!m_session) {
+            return;
+        }
 
+        auto supportedInputNames = getSupportedInputNames(m_session);
+        auto supportedOutputNames = getSupportedOutputNames(m_session);
+
+        // Basic validation
+        bool isValidModel = true;
+        // Required input names
+        isValidModel &= hasKey(supportedInputNames, "tokens");
+        isValidModel &= hasKey(supportedInputNames, "durations");
+        isValidModel &= hasKey(supportedInputNames, "f0");
+        isValidModel &= hasKey(supportedInputNames, "speedup");
+        // Required Output names
+        isValidModel &= hasKey(supportedOutputNames, "mel");
+        isValidModel &= (supportedOutputNames.size() == 1);
+        m_modelFlags.setIf(AcousticModelFlags::Valid, isValidModel);
+        if (!isValidModel) {
+            return;
+        }
+
+        // Parameters that the model may support
+        m_modelFlags.setIf(AcousticModelFlags::Velocity, hasKey(supportedInputNames, "velocity"));
+        m_modelFlags.setIf(AcousticModelFlags::Gender, hasKey(supportedInputNames, "gender"));
+        m_modelFlags.setIf(AcousticModelFlags::MultiSpeakers, hasKey(supportedInputNames, "spk_embed"));
+        m_modelFlags.setIf(AcousticModelFlags::Energy, hasKey(supportedInputNames, "energy"));
+        m_modelFlags.setIf(AcousticModelFlags::Breathiness, hasKey(supportedInputNames, "breathiness"));
+        m_modelFlags.setIf(AcousticModelFlags::ShallowDiffusion, hasKey(supportedInputNames, "depth"));
+    }
 
     std::vector<float> vocoderInfer(const TString& model, Ort::Value& mel, const std::vector<double>& f0) {
         Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "VocoderInfer");
