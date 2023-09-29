@@ -4,33 +4,45 @@ project(ds_onnx_infer)
 
 set(CMAKE_CXX_STANDARD 17)
 
-set(THIRDPARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty")
-set(NUGET_ROOT "${THIRDPARTY_DIR}/nuget_packages")
+option(ENABLE_DML "Enable DirectML support" off)
+option(ENABLE_CUDA "Enable CUDA support" off)
 
-# Load NuGet packages
-file(READ "../nuget_packages.txt" nuget_packages)
-string(REPLACE "\n" ";" pkg_list ${nuget_packages})
-foreach(_item ${pkg_list})
-    string(REPLACE "=" ";" pair ${_item})
-    list(GET pair 0 pkg_name)
-    string(STRIP ${pkg_name} pkg_name)
-    list(GET pair 1 pkg_ver)
-    string(STRIP pkg_ver ${pkg_ver})
+if(ENABLE_DML)
+    message("-- ONNX Runtime DirectML is enabled")
+endif()
 
-    set(package_root "${NUGET_ROOT}/${pkg_name}.${pkg_ver}")
-    if(pkg_name STREQUAL "Microsoft.AI.DirectML")
-        message("-- NuGet ${pkg_name} (${pkg_ver})")
-        set(DML_ROOT "${package_root}")
-        set(DML_INCLUDE "${DML_ROOT}/include")
-        set(DML_LIB "${DML_ROOT}/bin/x64-win")
-    elseif(pkg_name STREQUAL "Microsoft.ML.OnnxRuntime.DirectML")
-        message("-- NuGet ${pkg_name} (${pkg_ver})")
-        set(ONNX_DML_ROOT "${package_root}")
-        set(ONNX_DML_INCLUDE "${ONNX_DML_ROOT}/build/native/include")
-        set(ONNX_DML_LIB "${ONNX_DML_ROOT}/runtimes/win-x64/native")
+if(ENABLE_CUDA)
+    message("-- ONNX Runtime CUDA is enabled")
+endif()
+
+if(NOT DEFINED ONNXRUNTIME_INCLUDE_PATH)  # ONNX Runtime include path
+    message("-- Notice: ONNXRUNTIME_INCLUDE_PATH is not set. The build system will use system default paths.")
+else()
+    message("-- ONNXRUNTIME_INCLUDE_PATH is set to \"${ONNXRUNTIME_INCLUDE_PATH}\"")
+endif()
+
+if(NOT DEFINED ONNXRUNTIME_LIB_PATH)  # ONNX Runtime library path
+    message("-- Notice: ONNXRUNTIME_LIB_PATH is not set. The build system will use system default paths.")
+else()
+    message("-- ONNXRUNTIME_LIB_PATH is set to \"${ONNXRUNTIME_LIB_PATH}\"")
+endif()
+
+
+if(ENABLE_DML)
+    if(NOT DEFINED DML_INCLUDE_PATH)  # DirectML include path
+        message("-- Notice: DML_INCLUDE_PATH is not set. The build system will use system default paths.")
+    else()
+        message("-- DML_INCLUDE_PATH is set to \"${DML_INCLUDE_PATH}\"")
     endif()
-endforeach()
 
+    if(NOT DEFINED DML_LIB_PATH)  # DirectML library path
+        message("-- Notice: DML_LIB_PATH is not set. The build system will use system default paths.")
+    else()
+        message("-- DML_LIB_PATH is set to \"${DML_LIB_PATH}\"")
+    endif()
+endif()
+
+set(THIRDPARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty")
 
 add_executable(${PROJECT_NAME}
         main.cpp
@@ -65,16 +77,54 @@ target_link_libraries(${PROJECT_NAME} PRIVATE yaml-cpp)
 find_package(argparse CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE argparse::argparse)
 
-target_include_directories(${PROJECT_NAME} PUBLIC
-        ${DML_INCLUDE} ${ONNX_DML_INCLUDE}
+# ONNX Runtime libraries
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+        ${ONNXRUNTIME_INCLUDE_PATH}
 )
 
-target_link_directories(${PROJECT_NAME} PUBLIC
-        ${ONNX_DML_LIB}
+target_link_directories(${PROJECT_NAME} PRIVATE
+        ${ONNXRUNTIME_LIB_PATH}
 )
 
-target_link_libraries(${PROJECT_NAME} PUBLIC
-        "user32.lib" "gdi32.lib" "onnxruntime.lib")
+if(ENABLE_DML)
+    if(DEFINED DML_INCLUDE_PATH)
+        target_include_directories(${PROJECT_NAME} PRIVATE
+                ${DML_INCLUDE_PATH}
+        )
+    endif()
+    if(DEFINED DML_LIB_PATH)
+        target_link_directories(${PROJECT_NAME} PRIVATE
+                ${DML_LIB_PATH}
+        )
+    endif()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+            ONNXRUNTIME_ENABLE_DML
+    )
+endif()
+
+if(ENABLE_CUDA)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+            ONNXRUNTIME_ENABLE_CUDA
+    )
+endif()
+
+if(WIN32 AND MSVC)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+            "user32.lib" "gdi32.lib" "onnxruntime.lib")
+else()
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+            "-lonnxruntime")
+endif()
+
+# fix gcc build
+if (CMAKE_COMPILER_IS_GNUCC
+        AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 8.0
+        AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+            "stdc++fs")
+endif()
+
 
 #[[
 if(WIN32)
@@ -103,19 +153,23 @@ endif()
 # the output dir. Define a function to do so. This is called from the cmake file in the subdirectories.
 function(copy_dlls target_name)
     if (MSVC)
-        file(GLOB ORT_DLLS ${ONNX_DML_LIB}/*.dll)
-        foreach(ORT_DLL ${ORT_DLLS})
-            add_custom_command(TARGET ${target_name} POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy ${ORT_DLL}  $<TARGET_FILE_DIR:${target_name}>)
-        endforeach()
-        list(APPEND DML_DLLS "DirectML.dll")
-        if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-            list(APPEND DML_DLLS "DirectML.Debug.dll")
+        if(ONNXRUNTIME_LIB_PATH)
+            file(GLOB ORT_DLLS ${ONNXRUNTIME_LIB_PATH}/*.dll)
+            foreach(ORT_DLL ${ORT_DLLS})
+                add_custom_command(TARGET ${target_name} POST_BUILD
+                        COMMAND ${CMAKE_COMMAND} -E copy ${ORT_DLL}  $<TARGET_FILE_DIR:${target_name}>)
+            endforeach()
         endif()
-        foreach(DML_DLL ${DML_DLLS})
-            add_custom_command(TARGET ${target_name} POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy ${DML_LIB}/${DML_DLL}  $<TARGET_FILE_DIR:${target_name}>)
-        endforeach()
+        if(ENABLE_DML AND DML_LIB_PATH)
+            list(APPEND DML_DLLS "DirectML.dll")
+            if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+                list(APPEND DML_DLLS "DirectML.Debug.dll")
+            endif()
+            foreach(DML_DLL ${DML_DLLS})
+                add_custom_command(TARGET ${target_name} POST_BUILD
+                        COMMAND ${CMAKE_COMMAND} -E copy ${DML_LIB_PATH}/${DML_DLL}  $<TARGET_FILE_DIR:${target_name}>)
+            endforeach()
+        endif()
     endif()
 endfunction()
 

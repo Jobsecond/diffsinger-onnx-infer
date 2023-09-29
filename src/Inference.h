@@ -18,12 +18,18 @@ namespace diffsinger {
         int depth = 1000;
     };
 
+    enum class ExecutionProvider {
+        CPU,
+        CUDA,
+        DirectML
+    };
+
     std::vector<float> vocoderInfer(const TString& model, Ort::Value& mel, const std::vector<double>& f0);
 
     class AcousticInference {
     public:
         explicit AcousticInference(const TString &modelPath);
-        bool initSession(bool useDml, int deviceIndex = 0);
+        bool initSession(ExecutionProvider ep = ExecutionProvider::CPU, int deviceIndex = 0);
         void endSession();
         bool hasSession();
         TString getModelPath();
@@ -32,9 +38,13 @@ namespace diffsinger {
         Ort::Value inferToOrtValue(const PreprocessedData &pd, const InferenceSettings &inferSettings);
     private:
         TString m_modelPath;
-        Ort::Session m_session;
+
+        // Ort::Env must be initialized before Ort::Session.
+        // (In this class, it should be defined before Ort::Session)
+        // Otherwise, access violation will occur when Ort::Session destructor is called.
         Ort::Env m_env;
-        OrtApi const& ortApi; // Uses ORT_API_VERSION
+        Ort::Session m_session;
+        OrtApi const &ortApi; // Uses ORT_API_VERSION
         AcousticModelFlags m_modelFlags;
     };
 

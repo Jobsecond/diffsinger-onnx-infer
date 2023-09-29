@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <cctype>
 #include <filesystem>
 #include <utility>
 
@@ -28,8 +29,10 @@ namespace diffsinger {
              const std::string &spkMixStr = "",
              int acousticSpeedup = 10,
              int shallowDiffusionDepth = 1000,
-             bool cpuOnly = false,
+             ExecutionProvider ep = ExecutionProvider::CPU,
              int deviceIndex = 0);
+
+    ExecutionProvider parseEPFromString(const std::string &ep);
 }
 
 #ifdef WIN32
@@ -47,7 +50,15 @@ int main(int argc, char *argv[]) {
     program.add_argument("--out").required().help("Output Audio Filename (*.wav)");
     program.add_argument("--speedup").scan<'i', int>().default_value(10).help("PNDM speedup ratio");
     program.add_argument("--depth").scan<'i', int>().default_value(1000).help("Shallow diffusion depth (needs acoustic model support)");
-    program.add_argument("--cpu-only").default_value(false).implicit_value(true).help("Use CPU for audio inference");
+    program.add_argument("--ep").default_value("cpu").help(
+            "Execution Provider for audio inference. Supported: cpu (CPUExecutionProvider)"
+#ifdef ONNXRUNTIME_ENABLE_CUDA
+            ", cuda (CUDAExecutionProvider)"
+#endif
+#ifdef ONNXRUNTIME_ENABLE_DML
+            ", directml, dml (DmlExecutionProvider)"
+#endif
+            );
     program.add_argument("--device-index").scan<'i', int>().default_value(0).help("GPU device index");
 
     try {
@@ -65,8 +76,10 @@ int main(int argc, char *argv[]) {
     auto outputAudioTitle = program.get("--out");
     auto speedup = program.get<int>("--speedup");
     auto depth = program.get<int>("--depth");
-    auto cpuOnly = program.get<bool>("--cpu-only");
+    auto ep = program.get("--ep");
     auto deviceIndex = program.get<int>("--device-index");
+
+    auto epEnum = diffsinger::parseEPFromString(ep);
 
 #ifdef WIN32
     auto currentCodePage = ::GetACP();
@@ -77,10 +90,10 @@ int main(int argc, char *argv[]) {
                     spkMixStr,
                     speedup,
                     depth,
-                    cpuOnly,
+                    epEnum,
                     deviceIndex);
 #else
-    diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, spkMixStr, speedup, depth, cpuOnly, deviceIndex);
+    diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, spkMixStr, speedup, depth, epEnum, deviceIndex);
 #endif
 
     return 0;
@@ -95,7 +108,7 @@ namespace diffsinger {
              const std::string &spkMixStr,
              int acousticSpeedup,
              int shallowDiffusionDepth,
-             bool cpuOnly,
+             ExecutionProvider ep,
              int deviceIndex) {
 
         // Get the available providers
@@ -150,7 +163,8 @@ namespace diffsinger {
         size_t numSegments = dsProject.size();
 
         AcousticInference acousticInference(dsConfig.acoustic);
-        bool isSessionInitOk = acousticInference.initSession(!cpuOnly, deviceIndex);
+
+        bool isSessionInitOk = acousticInference.initSession(ep, deviceIndex);
         if (!isSessionInitOk) {
             std::cout << "ERROR: Session initialization failed.\n";
             return;
@@ -209,5 +223,18 @@ namespace diffsinger {
         if ((audioFile.error() != SF_ERR_NO_ERROR) || (numWritten == 0)) {
             std::cout << "ERROR: audio write failed. Reason: " << audioFile.strError() << '\n';
         }
+    }
+
+    ExecutionProvider parseEPFromString(const std::string &ep) {
+        std::string epLower;
+        epLower.resize(ep.size());
+        std::transform(ep.begin(), ep.end(), epLower.begin(), [](unsigned char c){ return std::tolower(c); });
+        if (ep == "cuda" || ep == "cudaexecutionprovider") {
+            return ExecutionProvider::CUDA;
+        }
+        else if (ep == "dml" || ep == "directml" || ep == "dmlexecutionprovider") {
+            return ExecutionProvider::DirectML;
+        }
+        return ExecutionProvider::CPU;
     }
 }

@@ -2,8 +2,9 @@
 #include <unordered_set>
 #include <iostream>
 
-#include "cpu_provider_factory.h"
+#ifdef ONNXRUNTIME_ENABLE_DML
 #include "dml_provider_factory.h"
+#endif
 
 #include "Inference.h"
 
@@ -48,26 +49,97 @@ namespace diffsinger {
     /* IMPLEMENTATION BELOW */
 
     AcousticInference::AcousticInference(const TString &modelPath)
-            : m_modelPath(modelPath), m_session(nullptr), ortApi(Ort::GetApi()),
+            : m_modelPath(modelPath),
               m_env(ORT_LOGGING_LEVEL_ERROR, "DiffSinger"),
+              m_session(nullptr),
+              ortApi(Ort::GetApi()),
               m_modelFlags() {}
 
     TString AcousticInference::getModelPath() {
         return m_modelPath;
     }
 
-    bool AcousticInference::initSession(bool useDml, int deviceIndex) {
+    bool AcousticInference::initSession(ExecutionProvider ep, int deviceIndex) {
         m_modelFlags.reset();
         try {
             auto options = Ort::SessionOptions();
-            if (useDml) {
-                const OrtDmlApi *ortDmlApi;
-                ortApi.GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void **>(&ortDmlApi));
+            switch (ep) {
+                case ExecutionProvider::DirectML:
+#ifdef ONNXRUNTIME_ENABLE_DML
+                {
+                    std::cout << "Try DirectML...\n";
+                    const OrtDmlApi *ortDmlApi;
+                    auto getApiStatus = Ort::Status(ortApi.GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void **>(&ortDmlApi)));
+                    if (getApiStatus.IsOK()) {
+                        std::cout << "Successfully got DirectML API.\n";
+                        options.DisableMemPattern();
+                        options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
 
-                options.DisableMemPattern();
-                options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+                        auto status = Ort::Status(ortDmlApi->SessionOptionsAppendExecutionProvider_DML(options, deviceIndex));
+                        if (status.IsOK()) {
+                            std::cout << "Successfully appended DirectML Execution Provider.\n";
+                        }
+                        else {
+                            std::cout << "Failed to append DirectML Execution Provider. Use CPU instead. Error code: "
+                                      << status.GetErrorCode()
+                                      << ", Reason: " << status.GetErrorMessage() << "\n";
+                        }
+                    }
+                    else {
+                        std::cout << "Failed to get DirectML API. Now use CPU instead.\n";
+                    }
+                }
+#else
+                    std::cout << "The software is not built with DirectML support. Use CPU instead.\n";
+#endif
+                    break;
+                case ExecutionProvider::CUDA:
+#ifdef ONNXRUNTIME_ENABLE_CUDA
+                {
+                    std::cout << "Try CUDA...\n";
+                    OrtCUDAProviderOptionsV2 *cudaOptions = nullptr;
+                    ortApi.CreateCUDAProviderOptions(&cudaOptions);
 
-                ortDmlApi->SessionOptionsAppendExecutionProvider_DML(options, deviceIndex);
+                    // The following block of code sets device_id
+                    {
+                        // Device ID from int to string
+                        auto cudaDeviceIdStr = std::to_string(deviceIndex);
+                        auto cudaDeviceIdStr_cstyle = cudaDeviceIdStr.c_str();
+
+                        constexpr int CUDA_OPTIONS_SIZE = 1;
+                        const char *cudaOptionsKeys[CUDA_OPTIONS_SIZE] = { "device_id" };
+                        const char *cudaOptionsValues[CUDA_OPTIONS_SIZE] = { cudaDeviceIdStr_cstyle };
+                        auto updateStatus = Ort::Status(
+                                ortApi.UpdateCUDAProviderOptions(cudaOptions, cudaOptionsKeys, cudaOptionsValues,
+                                                                 CUDA_OPTIONS_SIZE));
+                        if (!updateStatus.IsOK()) {
+                            std::cout << "Failed to update CUDA Execution Provider options. Error code: "
+                                      << updateStatus.GetErrorCode()
+                                      << ", Reason: " << updateStatus.GetErrorMessage() << "\n";
+                        }
+                    }
+
+                    auto status = Ort::Status(
+                            ortApi.SessionOptionsAppendExecutionProvider_CUDA_V2(options, cudaOptions));
+                    ortApi.ReleaseCUDAProviderOptions(cudaOptions);
+
+                    if (status.IsOK()) {
+                        std::cout << "Successfully appended CUDA Execution Provider.\n";
+                    }
+                    else {
+                        std::cout << "Failed to append CUDA Execution Provider. Use CPU instead. Error code: "
+                                  << status.GetErrorCode()
+                                  << ", Reason: " << status.GetErrorMessage() << "\n";
+                    }
+                }
+#else
+                    std::cout << "The software is not built with CUDA support. Use CPU instead.\n";
+#endif
+                    break;
+                default:
+                    // CPU and other
+                    std::cout << "Use CPU.\n";
+                    break;
             }
 
             //options.AppendExecutionProvider_CUDA(options1);
