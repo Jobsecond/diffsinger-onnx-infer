@@ -106,9 +106,9 @@ namespace diffsinger {
                         auto cudaDeviceIdStr = std::to_string(deviceIndex);
                         auto cudaDeviceIdStr_cstyle = cudaDeviceIdStr.c_str();
 
-                        constexpr int CUDA_OPTIONS_SIZE = 1;
-                        const char *cudaOptionsKeys[CUDA_OPTIONS_SIZE] = { "device_id" };
-                        const char *cudaOptionsValues[CUDA_OPTIONS_SIZE] = { cudaDeviceIdStr_cstyle };
+                        constexpr int CUDA_OPTIONS_SIZE = 2;
+                        const char *cudaOptionsKeys[CUDA_OPTIONS_SIZE] = { "device_id", "cudnn_conv_algo_search" };
+                        const char *cudaOptionsValues[CUDA_OPTIONS_SIZE] = { cudaDeviceIdStr_cstyle, "DEFAULT" };
                         auto updateStatus = Ort::Status(
                                 ortApi.UpdateCUDAProviderOptions(cudaOptions, cudaOptionsKeys, cudaOptionsValues,
                                                                  CUDA_OPTIONS_SIZE));
