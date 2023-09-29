@@ -62,7 +62,8 @@ add_executable(${PROJECT_NAME}
         ModelData.h
         SpeakerEmbed.cpp
         SpeakerEmbed.h
-        InferenceFlags.h)
+        InferenceFlags.h
+)
 
 
 find_package(SndFile CONFIG REQUIRED)
@@ -83,9 +84,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
         ${ONNXRUNTIME_INCLUDE_PATH}
 )
 
-target_link_directories(${PROJECT_NAME} PRIVATE
-        ${ONNXRUNTIME_LIB_PATH}
-)
+#target_link_directories(${PROJECT_NAME} PRIVATE
+#        ${ONNXRUNTIME_LIB_PATH}
+#)
 
 if(ENABLE_DML)
     if(DEFINED DML_INCLUDE_PATH)
@@ -94,9 +95,9 @@ if(ENABLE_DML)
         )
     endif()
     if(DEFINED DML_LIB_PATH)
-        target_link_directories(${PROJECT_NAME} PRIVATE
-                ${DML_LIB_PATH}
-        )
+    #    target_link_directories(${PROJECT_NAME} PRIVATE
+    #            ${DML_LIB_PATH}
+    #    )
     endif()
     target_compile_definitions(${PROJECT_NAME} PRIVATE
             ONNXRUNTIME_ENABLE_DML
@@ -111,10 +112,10 @@ endif()
 
 if(WIN32 AND MSVC)
     target_link_libraries(${PROJECT_NAME} PRIVATE
-            "user32.lib" "gdi32.lib" "onnxruntime.lib")
+            "user32.lib" "gdi32.lib") # "onnxruntime.lib")
 else()
-    target_link_libraries(${PROJECT_NAME} PRIVATE
-            "-lonnxruntime")
+    #target_link_libraries(${PROJECT_NAME} PRIVATE
+    #        "-lonnxruntime")
 endif()
 
 # fix gcc build
@@ -125,6 +126,9 @@ if (CMAKE_COMPILER_IS_GNUCC
             "stdc++fs")
 endif()
 
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+        ORT_API_MANUAL_INIT
+)
 
 #[[
 if(WIN32)
@@ -137,17 +141,17 @@ endif()
 
 # On Linux the samples use libjpeg and libpng for decoding images.
 # On Windows they use Windows Image Component(WIC)
-if(NOT WIN32)
-    find_package(JPEG)
-    if(LIBPNG_ROOTDIR)
-        set(PNG_FOUND true)
-        set(PNG_LIBRARIES png16)
-        set(PNG_INCLUDE_DIRS "${LIBPNG_ROOTDIR}/include")
-        set(PNG_LIBDIR "${LIBPNG_ROOTDIR}/lib")
-    else()
-        find_package(PNG)
-    endif()
-endif()
+#if(NOT WIN32)
+#    find_package(JPEG)
+#    if(LIBPNG_ROOTDIR)
+#        set(PNG_FOUND true)
+#        set(PNG_LIBRARIES png16)
+#        set(PNG_INCLUDE_DIRS "${LIBPNG_ROOTDIR}/include")
+#        set(PNG_LIBDIR "${LIBPNG_ROOTDIR}/lib")
+#    else()
+#        find_package(PNG)
+#    endif()
+#endif()
 
 # Windows might have an onnxruntime.dll in the system directory so it's more robust to manually copy the dlls to
 # the output dir. Define a function to do so. This is called from the cmake file in the subdirectories.

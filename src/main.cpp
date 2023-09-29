@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <chrono>
 #include <utility>
+#include <string>
 
 #include <onnxruntime_cxx_api.h>
 
@@ -12,7 +13,7 @@
 
 #include <sndfile.hh>
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <Windows.h>
 #endif
 
@@ -22,6 +23,18 @@
 #include "Preprocess.h"
 #include "Inference.h"
 
+std::wstring winErrorMessage(uint32_t error, bool nativeLanguage = true);
+
+namespace MyOrt {
+    static const void *ortLibHandle;
+
+    static const OrtApi *ortApi;
+
+    static const OrtApiBase *ortApiBase;
+
+    void Load();
+    void Free();
+}  // namespace MyOrt
 
 namespace diffsinger {
     void run(const TString &dsFilePath,
@@ -38,7 +51,7 @@ namespace diffsinger {
     std::string millisecondsToSecondsString(long long milliseconds);
 }
 
-#ifdef WIN32
+#ifdef _WIN32
 using diffsinger::MBStringToWString;
 #endif
 
@@ -84,7 +97,8 @@ int main(int argc, char *argv[]) {
 
     auto epEnum = diffsinger::parseEPFromString(ep);
 
-#ifdef WIN32
+    MyOrt::Load();  // Load ONNX Runtime DLL
+#ifdef _WIN32
     auto currentCodePage = ::GetACP();
     diffsinger::run(MBStringToWString(dsPath, currentCodePage),
                     MBStringToWString(dsConfigPath, currentCodePage),
@@ -99,6 +113,7 @@ int main(int argc, char *argv[]) {
     diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, spkMixStr, speedup, depth, epEnum, deviceIndex);
 #endif
 
+    MyOrt::Free();  // Free ONNX Runtime DLL
     return 0;
 }
 
@@ -122,6 +137,8 @@ namespace diffsinger {
         for (const auto &provider: availableProviders) {
             std::cout << '-' << ' ' << provider << std::endl;
         }
+
+        std::cout << "ONNX Runtime Version: " << MyOrt::ortApiBase->GetVersionString() << '\n';
 
         auto dsConfig = DsConfig::fromYAML(dsConfigPath);
 
@@ -262,4 +279,110 @@ namespace diffsinger {
         ss << decimalPart;
         return ss.str();
     }
+}  // namespace diffsinger
+
+#ifdef _WIN32
+std::wstring winErrorMessage(uint32_t error, bool nativeLanguage) {
+    std::wstring rc;
+    wchar_t *lpMsgBuf;
+
+    const DWORD len = ::FormatMessageW(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL, error,
+            nativeLanguage ? 0 : MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+            reinterpret_cast<LPWSTR>(&lpMsgBuf), 0, NULL);
+
+    if (len) {
+        // Remove tail line breaks
+        if (lpMsgBuf[len - 1] == L'\n') {
+            lpMsgBuf[len - 1] = L'\0';
+            if (len > 2 && lpMsgBuf[len - 2] == L'\r') {
+                lpMsgBuf[len - 2] = L'\0';
+            }
+        }
+        rc = std::wstring(lpMsgBuf, int(len));
+        ::LocalFree(lpMsgBuf);
+    } else {
+        rc += L"unknown error";
+    }
+
+    return rc;
 }
+#endif
+
+namespace MyOrt {
+    void Load() {
+        auto handle =
+#ifdef _WIN32
+                ::LoadLibraryExW(L"onnxruntime.dll", NULL,
+                                 LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+#else
+        dlopen("libonnxruntime.so", RTLD_NOW)
+#endif
+        ;
+
+        if (!handle) {
+#ifdef _WIN32
+            std::wcout << L"LoadLibrary failed: "
+                       << winErrorMessage(::GetLastError(), false) << std::endl;
+#else
+            std::cout << "dlopen failed: " << dlerror() << std::endl;
+#endif
+            std::exit(-1);
+        }
+        std::cout << "Successfully loaded ORT dll.\n";
+
+        auto addr = (OrtApiBase * (ORT_API_CALL *)())
+#ifdef _WIN32
+        ::GetProcAddress(handle, "OrtGetApiBase")
+#else
+            dlsym(handle, "OrtGetApiBase")
+#endif
+                ;
+        if (!addr) {
+#ifdef _WIN32
+            std::wcout << L"GetProcAddress failed: "
+                       << winErrorMessage(::GetLastError(), false) << std::endl;
+#else
+            std::cout << "dlsym failed: " << dlerror() << std::endl;
+#endif
+            std::exit(-1);
+        }
+
+        std::cout << "Successfully got the address of OrtGetApiBase function.\n";
+
+        ortLibHandle = handle;
+
+        ortApiBase = addr();
+
+        ortApi = ortApiBase->GetApi(ORT_API_VERSION);
+
+        if (!ortApi) {
+            std::cout << "ortApiBase->GetApi failed.\n";
+            std::exit(-1);
+        }
+
+        std::cout << "Successfully got ORT API.\n";
+        Ort::InitApi(ortApi);
+
+    }  // Load()
+
+    void Free() {
+        if (!
+#ifdef _WIN32
+                ::FreeLibrary((HMODULE)ortLibHandle)
+#else
+            (dlclose(handle) == 0)
+#endif
+                ) {
+#ifdef _WIN32
+            std::wcout << L"FreeLibrary failed: "
+                       << winErrorMessage(::GetLastError(), false) << std::endl;
+#else
+            std::cout << "dlclose failed: " << dlerror() << std::endl;
+#endif
+            std::exit(-1);
+        }
+    }  // Free()
+}  // namespace MyOrt
