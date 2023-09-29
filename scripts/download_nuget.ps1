@@ -65,14 +65,15 @@ function Get-InverseString {
     return $inverseString
 }
 
-# Set paths
-$projectRoot = "$PSScriptRoot/.."
-
-$nugetExePath = "$projectRoot/nuget.exe"
-$packagesPath = "$projectRoot/src/thirdparty/nuget_packages"
-
-$nugetConfigDirName = "nuget_config"
-
+function New-Directory {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+    if (-not (Test-Path -Path $Path)) {
+        New-Item -Path $Path -ItemType Directory -Force | Out-Null
+    }
+}
 
 # Select platform
 $Platform = $Platform.Trim()
@@ -112,9 +113,18 @@ else {
     $nugetConfigVariety = "cpu"
 }
 
+
+# Set paths
+$projectRoot = "$PSScriptRoot/.."
+
+$nugetRoot = "$projectRoot/NuGet"
+$nugetExePath = "$nugetRoot/NuGet.exe"
+$packagesPath = "$nugetRoot/Packages"
+
+$nugetConfigDirName = "NuGet"
 $nugetPkgConfigPath = "$PSScriptRoot/$nugetConfigDirName/$nugetConfigVariety/packages.config"
 
-$nugetCachePath = $projectRoot + "/.nuget"
+$nugetCachePath = "$nugetRoot/Feeds"
 
 $env:NUGET_PACKAGES = $nugetCachePath
 
@@ -133,6 +143,11 @@ if ($proxyVariables) {
         }
     }
 }
+
+# Create NuGet directory structure
+New-Directory -Path $nugetRoot
+New-Directory -Path $nugetCachePath
+New-Directory -Path $packagesPath
 
 # Check if nuget.exe exists, download if not
 if (-not (Test-Path -Path $nugetExePath)) {
