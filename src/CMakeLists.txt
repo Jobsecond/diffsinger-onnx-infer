@@ -62,7 +62,9 @@ add_executable(${PROJECT_NAME}
         ModelData.h
         SpeakerEmbed.cpp
         SpeakerEmbed.h
-        InferenceFlags.h)
+        InferenceFlags.h
+        InferenceUtils.hpp
+)
 
 
 find_package(SndFile CONFIG REQUIRED)

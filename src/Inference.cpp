@@ -7,60 +7,21 @@
 #endif
 
 #include "Inference.h"
+#include "InferenceUtils.hpp"
 
 namespace diffsinger {
 
-    inline std::unordered_set<std::string> getSupportedInputNames(const Ort::Session &session);
-
-    inline std::unordered_set<std::string> getSupportedOutputNames(const Ort::Session &session);
-
-    template<class T_vector, class T_tensor = T_vector>
-    inline Ort::Value vectorToTensor(const std::vector<T_vector> &vec);
-
-    template<class T_vector, class T_tensor = T_vector>
-    inline Ort::Value vectorToTensorWithShape(const std::vector<T_vector> &vec, const std::vector<int64_t> &shape);
-
-    template<class T_scalar, class T_tensor = T_scalar>
-    inline Ort::Value scalarToTensor(const T_scalar &scalar);
-
-    template<class T_vector, class T_tensor = T_vector>
-    inline void appendVectorToInputTensors(const char *inputName,
-                                           const std::vector<T_vector> &vec,
-                                           std::vector<const char *> &inputNames,
-                                           std::vector<Ort::Value> &inputTensors);
-
-    template<class T_vector, class T_tensor = T_vector>
-    inline void appendVectorToInputTensorsWithShape(const char *inputName,
-                                                    const std::vector<T_vector> &vec,
-                                                    const std::vector<int64_t> &shape,
-                                                    std::vector<const char *> &inputNames,
-                                                    std::vector<Ort::Value> &inputTensors);
-
-    template<class T_scalar, class T_tensor = T_scalar>
-    inline void appendScalarToInputTensors(const char *inputName,
-                                           const T_scalar &scalar,
-                                           std::vector<const char *> &inputNames,
-                                           std::vector<Ort::Value> &inputTensors);
-
-    inline bool hasKey(const std::unordered_set<std::string> &container, const std::string &key);
-
-    inline void printOrtError(const Ort::Exception &err);
-
-    /* IMPLEMENTATION BELOW */
-
-    AcousticInference::AcousticInference(const TString &modelPath)
+    BaseInference::BaseInference(const TString &modelPath)
             : m_modelPath(modelPath),
               m_env(ORT_LOGGING_LEVEL_ERROR, "DiffSinger"),
               m_session(nullptr),
-              ortApi(Ort::GetApi()),
-              m_modelFlags() {}
+              ortApi(Ort::GetApi()) {}
 
-    TString AcousticInference::getModelPath() {
+    TString BaseInference::getModelPath() {
         return m_modelPath;
     }
 
-    bool AcousticInference::initSession(ExecutionProvider ep, int deviceIndex) {
-        m_modelFlags.reset();
+    bool BaseInference::initSession(ExecutionProvider ep, int deviceIndex) {
         try {
             auto options = Ort::SessionOptions();
             switch (ep) {
@@ -144,30 +105,8 @@ namespace diffsinger {
 
             //options.AppendExecutionProvider_CUDA(options1);
             m_session = Ort::Session(m_env, m_modelPath.c_str(), options);
-            checkModel();
-            if (!m_modelFlags.check(AcousticModelFlags::Valid)) {
-                std::cout << "Invalid acoustic model!\n";
-                endSession();
-                return false;
-            }
 
-            std::cout << "Successfully created acoustic inference session.\n";
-
-            std::cout << "Acoustic Model supported features:\n"
-                      << "Velocity="
-                      << (m_modelFlags.check(AcousticModelFlags::Velocity) ? "Yes" : "No") << "; "
-                      << "Gender="
-                      << (m_modelFlags.check(AcousticModelFlags::Gender) ? "Yes" : "No") << "; "
-                      << "Multi_Speakers="
-                      << (m_modelFlags.check(AcousticModelFlags::MultiSpeakers) ? "Yes" : "No") << "; "
-                      << "Energy="
-                      << (m_modelFlags.check(AcousticModelFlags::Energy) ? "Yes" : "No") << "; "
-                      << "Breathiness="
-                      << (m_modelFlags.check(AcousticModelFlags::Breathiness) ? "Yes" : "No") << "; "
-                      << "Shallow_Diffusion="
-                      << (m_modelFlags.check(AcousticModelFlags::ShallowDiffusion) ? "Yes" : "No") << '\n';
-
-            return true;
+            return postInitCheck();
         }
         catch (const Ort::Exception &ortException) {
             printOrtError(ortException);
@@ -175,6 +114,57 @@ namespace diffsinger {
         return false;
     }
 
+
+    bool BaseInference::hasSession() {
+        return m_session;
+    }
+
+    void BaseInference::endSession() {
+        {
+            Ort::Session emptySession(nullptr);
+            std::swap(m_session, emptySession);
+        }
+        postCleanup();
+    }
+
+    bool BaseInference::postInitCheck() {
+        return true;
+    }
+
+    void BaseInference::postCleanup() {}
+
+
+    AcousticInference::AcousticInference(const TString &modelPath) : BaseInference(modelPath), m_modelFlags() {}
+
+    bool AcousticInference::postInitCheck() {
+        updateFlags();
+        if (!m_modelFlags.check(AcousticModelFlags::Valid)) {
+            std::cout << "Invalid acoustic model!\n";
+            endSession();
+            return false;
+        }
+
+        std::cout << "Successfully created acoustic inference session.\n";
+
+        std::cout << "Acoustic Model supported features:\n"
+                  << "Velocity="
+                  << (m_modelFlags.check(AcousticModelFlags::Velocity) ? "Yes" : "No") << "; "
+                  << "Gender="
+                  << (m_modelFlags.check(AcousticModelFlags::Gender) ? "Yes" : "No") << "; "
+                  << "Multi_Speakers="
+                  << (m_modelFlags.check(AcousticModelFlags::MultiSpeakers) ? "Yes" : "No") << "; "
+                  << "Energy="
+                  << (m_modelFlags.check(AcousticModelFlags::Energy) ? "Yes" : "No") << "; "
+                  << "Breathiness="
+                  << (m_modelFlags.check(AcousticModelFlags::Breathiness) ? "Yes" : "No") << "; "
+                  << "Shallow_Diffusion="
+                  << (m_modelFlags.check(AcousticModelFlags::ShallowDiffusion) ? "Yes" : "No") << '\n';
+        return true;
+    }
+
+    void AcousticInference::postCleanup() {
+        m_modelFlags.reset();
+    }
 
     Ort::Value AcousticInference::inferToOrtValue(const PreprocessedData &pd, const InferenceSettings &inferSettings) {
         if (!m_session) {
@@ -283,19 +273,7 @@ namespace diffsinger {
         return ortValueToVector(inferToOrtValue(pd, inferSettings));
     }
 
-    bool AcousticInference::hasSession() {
-        return m_session;
-    }
-
-    void AcousticInference::endSession() {
-        {
-            Ort::Session emptySession(nullptr);
-            std::swap(m_session, emptySession);
-        }
-        m_modelFlags.reset();
-    }
-
-    void AcousticInference::checkModel() {
+    void AcousticInference::updateFlags() {
         m_modelFlags.reset();
         if (!m_session) {
             return;
@@ -356,118 +334,5 @@ namespace diffsinger {
         std::vector<float> waveform(waveformBuffer, waveformBuffer + waveformOutput.GetTensorTypeAndShapeInfo().GetElementCount());
 
         return waveform;
-    }
-
-    std::unordered_set<std::string> getSupportedInputNames(const Ort::Session &session) {
-        auto inputCount = session.GetInputCount();
-        std::unordered_set<std::string> supportedInputNames;
-        supportedInputNames.reserve(inputCount);
-
-        Ort::AllocatorWithDefaultOptions allocator;
-
-        for (size_t i = 0; i < inputCount; i++) {
-            auto inputNamePtr = session.GetInputNameAllocated(i, allocator);
-            supportedInputNames.emplace(inputNamePtr.get());
-        }
-
-        return supportedInputNames;
-    }
-
-    std::unordered_set<std::string> getSupportedOutputNames(const Ort::Session &session) {
-        auto outputCount = session.GetOutputCount();
-        std::unordered_set<std::string> supportedOutputNames;
-        supportedOutputNames.reserve(outputCount);
-
-        Ort::AllocatorWithDefaultOptions allocator;
-
-        for (size_t i = 0; i < outputCount; i++) {
-            auto outputNamePtr = session.GetOutputNameAllocated(i, allocator);
-            supportedOutputNames.emplace(outputNamePtr.get());
-        }
-
-        return supportedOutputNames;
-    }
-
-    template<class T_vector, class T_tensor>
-    Ort::Value vectorToTensor(const std::vector<T_vector> &vec) {
-        int64_t shape[] = { 1, static_cast<int64_t>(vec.size()) };  // shape = {1, N}
-        auto shapeSize = sizeof(shape) / sizeof(shape[0]);
-
-        Ort::AllocatorWithDefaultOptions allocator;
-        auto tensor = Ort::Value::CreateTensor<T_tensor>(allocator, shape, shapeSize);
-        auto buffer = tensor.template GetTensorMutableData<T_tensor>();
-        for (size_t i = 0; i < vec.size(); i++) {
-            buffer[i] = static_cast<T_tensor>(vec[i]);
-        }
-
-        return tensor;
-    }
-
-    template<class T_vector, class T_tensor>
-    Ort::Value vectorToTensorWithShape(const std::vector<T_vector> &vec, const std::vector<int64_t> &shape) {
-        auto shapeSize = shape.size();
-
-        Ort::AllocatorWithDefaultOptions allocator;
-        auto tensor = Ort::Value::CreateTensor<T_tensor>(allocator, shape.data(), shapeSize);
-        auto buffer = tensor.template GetTensorMutableData<T_tensor>();
-        for (size_t i = 0; i < vec.size(); i++) {
-            buffer[i] = static_cast<T_tensor>(vec[i]);
-        }
-
-        return tensor;
-    }
-
-    template<class T_scalar, class T_tensor>
-    Ort::Value scalarToTensor(const T_scalar &scalar) {
-        int64_t shape[] = { 1 };
-        auto shapeSize = sizeof(shape) / sizeof(shape[0]);
-
-        Ort::AllocatorWithDefaultOptions allocator;
-        auto tensor = Ort::Value::CreateTensor<T_tensor>(allocator, shape, shapeSize);
-        auto buffer = tensor.template GetTensorMutableData<T_tensor>();
-        buffer[0] = static_cast<T_tensor>(scalar);
-
-        return tensor;
-    }
-
-    template<class T_vector, class T_tensor>
-    void appendVectorToInputTensors(const char *inputName,
-                                    const std::vector<T_vector> &vec,
-                                    std::vector<const char *> &inputNames,
-                                    std::vector<Ort::Value> &inputTensors) {
-        inputNames.push_back(inputName);
-        auto inputTensor = vectorToTensor<T_vector, T_tensor>(vec);
-        inputTensors.push_back(std::move(inputTensor));
-    }
-
-    template<class T_vector, class T_tensor>
-    void appendVectorToInputTensorsWithShape(const char *inputName,
-                                             const std::vector<T_vector> &vec,
-                                             const std::vector<int64_t> &shape,
-                                             std::vector<const char *> &inputNames,
-                                             std::vector<Ort::Value> &inputTensors) {
-        inputNames.push_back(inputName);
-        auto inputTensor = vectorToTensorWithShape<T_vector, T_tensor>(vec, shape);
-        inputTensors.push_back(std::move(inputTensor));
-    }
-
-    template<class T_scalar, class T_tensor>
-    void appendScalarToInputTensors(const char *inputName,
-                                    const T_scalar &scalar,
-                                    std::vector<const char *> &inputNames,
-                                    std::vector<Ort::Value> &inputTensors) {
-        inputNames.push_back(inputName);
-        auto inputTensor = scalarToTensor<T_scalar, T_tensor>(scalar);
-        inputTensors.push_back(std::move(inputTensor));
-    }
-
-    bool hasKey(const std::unordered_set<std::string> &container, const std::string &key) {
-        return container.find(key) != container.end();
-    }
-
-    void printOrtError(const Ort::Exception &err) {
-        std::cout << "[ONNXRuntimeError] : "
-                  << err.GetOrtErrorCode() << " : "
-                  << err.what() << '\n';
     }
 }
