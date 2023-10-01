@@ -144,7 +144,18 @@ namespace diffsinger {
             return false;
         }
 
-        std::cout << "Successfully created acoustic inference session.\n";
+        return true;
+    }
+
+    void AcousticInference::postCleanup() {
+        m_modelFlags.reset();
+    }
+
+    void AcousticInference::printModelFeatures() {
+        if (!m_modelFlags.check(AcousticModelFlags::Valid)) {
+            std::cout << "The acoustic model is invalid.\n";
+            return;
+        }
 
         std::cout << "Acoustic Model supported features:\n"
                   << "Velocity="
@@ -159,11 +170,6 @@ namespace diffsinger {
                   << (m_modelFlags.check(AcousticModelFlags::Breathiness) ? "Yes" : "No") << "; "
                   << "Shallow_Diffusion="
                   << (m_modelFlags.check(AcousticModelFlags::ShallowDiffusion) ? "Yes" : "No") << '\n';
-        return true;
-    }
-
-    void AcousticInference::postCleanup() {
-        m_modelFlags.reset();
     }
 
     Ort::Value AcousticInference::inferToOrtValue(const PreprocessedData &pd, const InferenceSettings &inferSettings) {
@@ -259,8 +265,8 @@ namespace diffsinger {
         }
         catch (const Ort::Exception &ortException) {
             printOrtError(ortException);
-            return Ort::Value(nullptr);
         }
+        return Ort::Value(nullptr);
     }
 
     std::vector<float> AcousticInference::ortValueToVector(const Ort::Value &value) {
@@ -306,14 +312,12 @@ namespace diffsinger {
         m_modelFlags.setIf(AcousticModelFlags::ShallowDiffusion, hasKey(supportedInputNames, "depth"));
     }
 
-    std::vector<float> vocoderInfer(const TString& model, Ort::Value& mel, const std::vector<double>& f0) {
-        Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "VocoderInfer");
-        Ort::SessionOptions sessionOptions;
 
-        Ort::Session session(env, model.c_str(), sessionOptions);
+    // VocoderInference
 
-        Ort::AllocatorWithDefaultOptions allocator;
+    VocoderInference::VocoderInference(const TString &modelPath) : BaseInference(modelPath) {}
 
+    std::vector<float> VocoderInference::infer(Ort::Value &mel, const std::vector<double> &f0) {
         std::vector<const char *> inputNames;
         std::vector<Ort::Value> inputTensors;
 
@@ -327,7 +331,9 @@ namespace diffsinger {
         inputTensors.push_back(std::move(mel));
 
         std::vector<const char*> outputNames = {"waveform"};
-        std::vector<Ort::Value> outputTensors = session.Run(Ort::RunOptions{}, inputNames.data(), inputTensors.data(), inputNames.size(), outputNames.data(), outputNames.size());
+        std::vector<Ort::Value> outputTensors = m_session.Run(
+                Ort::RunOptions{}, inputNames.data(), inputTensors.data(),
+                inputNames.size(), outputNames.data(), outputNames.size());
 
         Ort::Value& waveformOutput = outputTensors[0];
         auto waveformBuffer = waveformOutput.GetTensorMutableData<float>();
@@ -335,4 +341,4 @@ namespace diffsinger {
 
         return waveform;
     }
-}
+}  // namespace diffsinger

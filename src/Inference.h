@@ -16,15 +16,14 @@ namespace diffsinger {
     struct InferenceSettings {
         int speedup = 10;
         int depth = 1000;
-    };
+    };  // struct InferenceSettings
 
     enum class ExecutionProvider {
         CPU,
         CUDA,
         DirectML
-    };
+    };  // enum class ExecutionProvider
 
-    std::vector<float> vocoderInfer(const TString& model, Ort::Value& mel, const std::vector<double>& f0);
 
     class BaseInference {
     public:
@@ -45,11 +44,13 @@ namespace diffsinger {
     protected:
         virtual bool postInitCheck();
         virtual void postCleanup();
-    };
+    };  // class BaseInference
+
 
     class AcousticInference : public BaseInference {
     public:
         explicit AcousticInference(const TString &modelPath);
+        void printModelFeatures();
         static std::vector<float> ortValueToVector(const Ort::Value &value);
         std::vector<float> infer(const PreprocessedData &pd, const InferenceSettings &inferSettings);
         Ort::Value inferToOrtValue(const PreprocessedData &pd, const InferenceSettings &inferSettings);
@@ -60,17 +61,15 @@ namespace diffsinger {
     protected:
         bool postInitCheck() override;
         void postCleanup() override;
-    };
+    };  // class AcousticInference
 
-    class VocoderInference {
+
+    class VocoderInference : public BaseInference {
     public:
         explicit VocoderInference(const TString &modelPath);
-        void initSession();
-        void endSession();
-        bool hasSession();
-        TString getModelPath();
+        std::vector<float> infer(Ort::Value& mel, const std::vector<double>& f0);
+    };  // class VocoderInference
 
-    };
-}
+}  // namespace diffsinger
 
 #endif //DS_ONNX_INFER_INFERENCE_H

@@ -165,13 +165,29 @@ namespace diffsinger {
         auto dsProject = loadDsProject(dsFilePath, spkMixStr);
         size_t numSegments = dsProject.size();
 
+        std::cout << '\n';
+        std::cout << "Initializing acoustic inference session...\n";
         AcousticInference acousticInference(dsConfig.acoustic);
 
-        bool isSessionInitOk = acousticInference.initSession(ep, deviceIndex);
-        if (!isSessionInitOk) {
-            std::cout << "!! ERROR: Session initialization failed.\n";
+        bool isAcousticSessionInitOk = acousticInference.initSession(ep, deviceIndex);
+        if (!isAcousticSessionInitOk) {
+            std::cout << "!! ERROR: Acoustic Session initialization failed.\n";
             return;
         }
+        std::cout << "Successfully created acoustic inference session.\n";
+        acousticInference.printModelFeatures();
+
+        std::cout << '\n';
+        std::cout << "Initializing vocoder inference session...\n";
+        VocoderInference vocoderInference(vocoderConfig.model);
+
+        bool isVocoderSessionInitOk = vocoderInference.initSession(ExecutionProvider::CPU, 0);
+        if (!isVocoderSessionInitOk) {
+            std::cout << "!! ERROR: Vocoder Session initialization failed.\n";
+            return;
+        }
+        std::cout << "Successfully created vocoder inference session.\n";
+        std::cout << '\n';
 
         std::vector< std::pair<int64_t, std::vector<float>> > waveformArr{};
         waveformArr.reserve(numSegments);
@@ -198,7 +214,7 @@ namespace diffsinger {
             }
             // mel will be `std::move`d in the next steps, so it will not be usable after that.
             std::cout << ">> Vocoder infer -> Waveform" << "\n";
-            auto waveform = vocoderInfer(vocoderConfig.model, mel, pd.f0);
+            auto waveform = vocoderInference.infer(mel, pd.f0);
 
             waveformArr.emplace_back(offsetInSamples, std::move(waveform));
             auto timeEnd = std::chrono::steady_clock::now();
@@ -206,6 +222,7 @@ namespace diffsinger {
             std::cout << ">> Time Elapsed: " << millisecondsToSecondsString(timeSpent) << " seconds\n";
         }
 
+        std::cout << "Inference finished.\n";
         std::cout << ">> Concatenating and saving wave file...\n";
         int64_t totalSamples = 0;
         for (const auto& [offsetInSamples, waveform] : waveformArr) {
