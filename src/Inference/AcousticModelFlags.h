@@ -1,5 +1,5 @@
-#ifndef DS_ONNX_INFER_INFERENCEFLAGS_H
-#define DS_ONNX_INFER_INFERENCEFLAGS_H
+#ifndef DS_ONNX_INFER_ACOUSTICMODELFLAGS_H
+#define DS_ONNX_INFER_ACOUSTICMODELFLAGS_H
 
 
 namespace diffsinger {
@@ -14,6 +14,7 @@ namespace diffsinger {
             Breathiness = 1 << 5,
             ShallowDiffusion = 1 << 6
         };
+    private:
         unsigned int m_flag;
     public:
         constexpr AcousticModelFlags();
@@ -57,4 +58,4 @@ namespace diffsinger {
     }
 }
 
-#endif //DS_ONNX_INFER_INFERENCEFLAGS_H
+#endif //DS_ONNX_INFER_ACOUSTICMODELFLAGS_H

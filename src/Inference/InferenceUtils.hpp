@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include <cstdint>
 
-#include <onnxruntime_cxx_api.h>
+#include "onnxruntime_cxx_api.h"
 
 
 namespace diffsinger {

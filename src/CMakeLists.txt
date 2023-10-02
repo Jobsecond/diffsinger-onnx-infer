@@ -51,8 +51,6 @@ add_executable(${PROJECT_NAME}
         ArrayUtil.hpp
         Preprocess.cpp
         Preprocess.h
-        Inference.cpp
-        Inference.h
         DsProject.h
         DsConfig.cpp
         DsConfig.h
@@ -62,9 +60,18 @@ add_executable(${PROJECT_NAME}
         ModelData.h
         SpeakerEmbed.cpp
         SpeakerEmbed.h
-        InferenceFlags.h
-        InferenceUtils.hpp
+        Inference/Inference.cpp
+        Inference/Inference.h
+        Inference/AcousticModelFlags.h
+        Inference/InferenceUtils.hpp
+        Inference/AcousticInference.cpp
+        Inference/AcousticInference.h
+        Inference/VocoderInference.cpp
+        Inference/VocoderInference.h
 )
+
+# Add current directory to include path
+target_include_directories(${PROJECT_NAME} PRIVATE .)
 
 
 find_package(SndFile CONFIG REQUIRED)

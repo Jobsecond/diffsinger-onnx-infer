@@ -1,140 +1,11 @@
-#include <unordered_map>
-#include <unordered_set>
-#include <iostream>
-
-#ifdef ONNXRUNTIME_ENABLE_DML
-#include "dml_provider_factory.h"
-#endif
-
-#include "Inference.h"
+#include "AcousticInference.h"
 #include "InferenceUtils.hpp"
+#include "ModelData.h"
+
 
 namespace diffsinger {
 
-    BaseInference::BaseInference(const TString &modelPath)
-            : m_modelPath(modelPath),
-              m_env(ORT_LOGGING_LEVEL_ERROR, "DiffSinger"),
-              m_session(nullptr),
-              ortApi(Ort::GetApi()) {}
-
-    TString BaseInference::getModelPath() {
-        return m_modelPath;
-    }
-
-    bool BaseInference::initSession(ExecutionProvider ep, int deviceIndex) {
-        try {
-            auto options = Ort::SessionOptions();
-            switch (ep) {
-                case ExecutionProvider::DirectML:
-#ifdef ONNXRUNTIME_ENABLE_DML
-                {
-                    std::cout << "Try DirectML...\n";
-                    const OrtDmlApi *ortDmlApi;
-                    auto getApiStatus = Ort::Status(ortApi.GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void **>(&ortDmlApi)));
-                    if (getApiStatus.IsOK()) {
-                        std::cout << "Successfully got DirectML API.\n";
-                        options.DisableMemPattern();
-                        options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
-
-                        auto status = Ort::Status(ortDmlApi->SessionOptionsAppendExecutionProvider_DML(options, deviceIndex));
-                        if (status.IsOK()) {
-                            std::cout << "Successfully appended DirectML Execution Provider.\n";
-                        }
-                        else {
-                            std::cout << "Failed to append DirectML Execution Provider. Use CPU instead. Error code: "
-                                      << status.GetErrorCode()
-                                      << ", Reason: " << status.GetErrorMessage() << "\n";
-                        }
-                    }
-                    else {
-                        std::cout << "Failed to get DirectML API. Now use CPU instead.\n";
-                    }
-                }
-#else
-                    std::cout << "The software is not built with DirectML support. Use CPU instead.\n";
-#endif
-                    break;
-                case ExecutionProvider::CUDA:
-#ifdef ONNXRUNTIME_ENABLE_CUDA
-                {
-                    std::cout << "Try CUDA...\n";
-                    OrtCUDAProviderOptionsV2 *cudaOptions = nullptr;
-                    ortApi.CreateCUDAProviderOptions(&cudaOptions);
-
-                    // The following block of code sets device_id
-                    {
-                        // Device ID from int to string
-                        auto cudaDeviceIdStr = std::to_string(deviceIndex);
-                        auto cudaDeviceIdStr_cstyle = cudaDeviceIdStr.c_str();
-
-                        constexpr int CUDA_OPTIONS_SIZE = 2;
-                        const char *cudaOptionsKeys[CUDA_OPTIONS_SIZE] = { "device_id", "cudnn_conv_algo_search" };
-                        const char *cudaOptionsValues[CUDA_OPTIONS_SIZE] = { cudaDeviceIdStr_cstyle, "DEFAULT" };
-                        auto updateStatus = Ort::Status(
-                                ortApi.UpdateCUDAProviderOptions(cudaOptions, cudaOptionsKeys, cudaOptionsValues,
-                                                                 CUDA_OPTIONS_SIZE));
-                        if (!updateStatus.IsOK()) {
-                            std::cout << "Failed to update CUDA Execution Provider options. Error code: "
-                                      << updateStatus.GetErrorCode()
-                                      << ", Reason: " << updateStatus.GetErrorMessage() << "\n";
-                        }
-                    }
-
-                    auto status = Ort::Status(
-                            ortApi.SessionOptionsAppendExecutionProvider_CUDA_V2(options, cudaOptions));
-                    ortApi.ReleaseCUDAProviderOptions(cudaOptions);
-
-                    if (status.IsOK()) {
-                        std::cout << "Successfully appended CUDA Execution Provider.\n";
-                    }
-                    else {
-                        std::cout << "Failed to append CUDA Execution Provider. Use CPU instead. Error code: "
-                                  << status.GetErrorCode()
-                                  << ", Reason: " << status.GetErrorMessage() << "\n";
-                    }
-                }
-#else
-                    std::cout << "The software is not built with CUDA support. Use CPU instead.\n";
-#endif
-                    break;
-                default:
-                    // CPU and other
-                    std::cout << "Use CPU.\n";
-                    break;
-            }
-
-            //options.AppendExecutionProvider_CUDA(options1);
-            m_session = Ort::Session(m_env, m_modelPath.c_str(), options);
-
-            return postInitCheck();
-        }
-        catch (const Ort::Exception &ortException) {
-            printOrtError(ortException);
-        }
-        return false;
-    }
-
-
-    bool BaseInference::hasSession() {
-        return m_session;
-    }
-
-    void BaseInference::endSession() {
-        {
-            Ort::Session emptySession(nullptr);
-            std::swap(m_session, emptySession);
-        }
-        postCleanup();
-    }
-
-    bool BaseInference::postInitCheck() {
-        return true;
-    }
-
-    void BaseInference::postCleanup() {}
-
-
-    AcousticInference::AcousticInference(const TString &modelPath) : BaseInference(modelPath), m_modelFlags() {}
+    AcousticInference::AcousticInference(const TString &modelPath) : Inference(modelPath), m_modelFlags() {}
 
     bool AcousticInference::postInitCheck() {
         updateFlags();
@@ -172,7 +43,7 @@ namespace diffsinger {
                   << (m_modelFlags.check(AcousticModelFlags::ShallowDiffusion) ? "Yes" : "No") << '\n';
     }
 
-    Ort::Value AcousticInference::inferToOrtValue(const PreprocessedData &pd, const InferenceSettings &inferSettings) {
+    Ort::Value AcousticInference::inferToOrtValue(const PreprocessedData &pd, const AcousticInferenceSettings &inferSettings) {
         if (!m_session) {
             std::cout << "Session is not initialized!\n";
             return Ort::Value(nullptr);
@@ -207,8 +78,8 @@ namespace diffsinger {
         if (m_modelFlags.check(AcousticModelFlags::MultiSpeakers)) {
             auto spkEmbedFrames = static_cast<int64_t>(pd.spk_embed.size()) / spkEmbedLastDimension;
             appendVectorToInputTensorsWithShape<float, float>("spk_embed", pd.spk_embed,
-                                                               {1, spkEmbedFrames, spkEmbedLastDimension},
-                                                               inputNames, inputTensors);
+                                                              {1, spkEmbedFrames, spkEmbedLastDimension},
+                                                              inputNames, inputTensors);
         }
         // TODO: If energy and breathiness are not supplied but required by the acoustic model,
         //       they should be inferred by the variance model.
@@ -275,7 +146,7 @@ namespace diffsinger {
         return output;
     }
 
-    std::vector<float> AcousticInference::infer(const PreprocessedData &pd, const InferenceSettings &inferSettings) {
+    std::vector<float> AcousticInference::infer(const PreprocessedData &pd, const AcousticInferenceSettings &inferSettings) {
         return ortValueToVector(inferToOrtValue(pd, inferSettings));
     }
 
@@ -311,34 +182,4 @@ namespace diffsinger {
         m_modelFlags.setIf(AcousticModelFlags::Breathiness, hasKey(supportedInputNames, "breathiness"));
         m_modelFlags.setIf(AcousticModelFlags::ShallowDiffusion, hasKey(supportedInputNames, "depth"));
     }
-
-
-    // VocoderInference
-
-    VocoderInference::VocoderInference(const TString &modelPath) : BaseInference(modelPath) {}
-
-    std::vector<float> VocoderInference::infer(Ort::Value &mel, const std::vector<double> &f0) {
-        std::vector<const char *> inputNames;
-        std::vector<Ort::Value> inputTensors;
-
-        // f0
-        appendVectorToInputTensors<double, float>("f0", f0, inputNames, inputTensors);
-
-        // mel
-        inputNames.push_back("mel");
-
-        // TODO: Why not omit std::move? Why not omit const in function parameter of mel?
-        inputTensors.push_back(std::move(mel));
-
-        std::vector<const char*> outputNames = {"waveform"};
-        std::vector<Ort::Value> outputTensors = m_session.Run(
-                Ort::RunOptions{}, inputNames.data(), inputTensors.data(),
-                inputNames.size(), outputNames.data(), outputNames.size());
-
-        Ort::Value& waveformOutput = outputTensors[0];
-        auto waveformBuffer = waveformOutput.GetTensorMutableData<float>();
-        std::vector<float> waveform(waveformBuffer, waveformBuffer + waveformOutput.GetTensorTypeAndShapeInfo().GetElementCount());
-
-        return waveform;
-    }
-}  // namespace diffsinger
+} // namespace diffsinger

@@ -20,7 +20,9 @@
 #include "DsProject.h"
 #include "DsConfig.h"
 #include "Preprocess.h"
-#include "Inference.h"
+#include "ModelData.h"
+#include "Inference/AcousticInference.h"
+#include "Inference/VocoderInference.h"
 
 
 namespace diffsinger {
@@ -192,7 +194,7 @@ namespace diffsinger {
         std::vector< std::pair<int64_t, std::vector<float>> > waveformArr{};
         waveformArr.reserve(numSegments);
 
-        InferenceSettings inferSettings{};
+        AcousticInferenceSettings inferSettings{};
         inferSettings.speedup = acousticSpeedup;
         inferSettings.depth = shallowDiffusionDepth;
 
