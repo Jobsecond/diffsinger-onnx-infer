@@ -14,6 +14,9 @@ namespace diffsinger {
         double offset = 0.0;
         std::vector<std::string> ph_seq;
         std::vector<double> ph_dur;
+        std::vector<int> ph_num;
+        std::vector<int> note_seq;  // MIDI note number
+        std::vector<double> note_dur;
         SampleCurve f0;
         SampleCurve gender;
         SampleCurve velocity;
@@ -23,6 +26,8 @@ namespace diffsinger {
     };
 
     std::vector<DsSegment> loadDsProject(const TString &dsFilePath, const std::string &spkMixStr = "");
+
+    int noteNameToMidi(const std::string &note);
 
 }
 

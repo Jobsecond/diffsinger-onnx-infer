@@ -17,6 +17,23 @@ namespace diffsinger {
         std::vector<double> energy;
         std::vector<double> breathiness;
     };
+
+    struct LinguisticInput {
+        std::vector<int64_t> tokens;
+        std::vector<int64_t> word_div;
+        std::vector<int64_t> word_dur;
+    };
+
+    struct LinguisticOut {
+        std::vector<float> encoder_out;
+
+        // x_masks should be bool vector, however vector<bool> is not a container storing bool
+        std::vector<char> x_masks;
+
+        bool empty() const {
+            return encoder_out.empty() && x_masks.empty();
+        }
+    };
 }
 
 #endif //DS_ONNX_INFER_MODELDATA_H

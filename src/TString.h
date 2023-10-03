@@ -6,7 +6,7 @@
 #include <string>
 
 namespace diffsinger {
-#if defined(WIN32)
+#if defined(_WIN32)
     #define DS_T(x) L##x
     using TString = std::wstring;
     using TChar = wchar_t;

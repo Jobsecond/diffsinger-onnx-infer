@@ -12,7 +12,7 @@
 
 #include <sndfile.hh>
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <Windows.h>
 #endif
 
@@ -40,7 +40,7 @@ namespace diffsinger {
     std::string millisecondsToSecondsString(long long milliseconds);
 }
 
-#ifdef WIN32
+#ifdef _WIN32
 using diffsinger::MBStringToWString;
 #endif
 
@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
 
     auto epEnum = diffsinger::parseEPFromString(ep);
 
-#ifdef WIN32
+#ifdef _WIN32
     auto currentCodePage = ::GetACP();
     diffsinger::run(MBStringToWString(dsPath, currentCodePage),
                     MBStringToWString(dsConfigPath, currentCodePage),

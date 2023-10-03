@@ -81,6 +81,18 @@ namespace diffsinger {
         return pd;
     }
 
+    LinguisticInput linguisticPreprocess(
+            const std::unordered_map<std::string, int64_t> &name2token,
+            const DsSegment &dsSegment,
+            double frameLength) {
+        LinguisticInput li{};
+        li.tokens = phonemesToTokens(name2token, dsSegment.ph_seq);
+        li.word_div = std::vector<int64_t>(dsSegment.ph_num.begin(), dsSegment.ph_num.end());
+        li.word_dur = phonemeDurationToFrames(dsSegment.note_dur, frameLength);
+
+        return li;
+    }
+
     std::vector<int64_t> phonemesToTokens(const std::unordered_map<std::string, int64_t> &name2token,
                                              const std::vector<std::string> &phonemes) {
         std::vector<int64_t> tokens;

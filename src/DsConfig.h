@@ -56,6 +56,19 @@ namespace diffsinger {
 
         static DsConfig fromYAML(const TString &dsConfigPath, bool *ok = nullptr);
     };
+
+    struct DsDurConfig {
+        std::filesystem::path phonemes;
+        std::filesystem::path linguistic;
+        std::filesystem::path dur;
+
+        int hopSize = 512;
+        int sampleRate = 44100;
+
+        bool predict_dur = false;
+
+        static DsDurConfig fromYAML(const TString &dsDurConfigPath, bool *ok = nullptr);
+    };
 }
 
 #endif //DS_ONNX_INFER_DSCONFIG_H

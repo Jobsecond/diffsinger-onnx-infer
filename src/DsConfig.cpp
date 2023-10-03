@@ -5,6 +5,12 @@
 
 #include "DsConfig.h"
 
+#ifdef _WIN32
+#define DS_STRING_CONVERT(x) diffsinger::MBStringToWString((x), 65001)
+#else
+#define DS_STRING_CONVERT(x) (x)
+#endif
+
 namespace diffsinger {
     DsConfig DsConfig::fromYAML(const TString &dsConfigPath, bool *ok) {
         DsConfig dsConfig;
@@ -21,12 +27,12 @@ namespace diffsinger {
         auto dsConfigDir = dsConfigPathFs.parent_path();
         YAML::Node config = YAML::Load(fileStream);
         if (config["phonemes"]) {
-            auto phonemesFilename = config["phonemes"].as<std::string>();
+            auto phonemesFilename = DS_STRING_CONVERT(config["phonemes"].as<std::string>());
             dsConfig.phonemes = dsConfigDir / phonemesFilename;
         }
 
         if (config["acoustic"]) {
-            auto acousticFilename = config["acoustic"].as<std::string>();
+            auto acousticFilename = DS_STRING_CONVERT(config["acoustic"].as<std::string>());
             dsConfig.acoustic = dsConfigDir / acousticFilename;
         }
 
@@ -106,7 +112,7 @@ namespace diffsinger {
         }
 
         if (config["model"]) {
-            auto model = config["model"].as<std::string>();
+            auto model = DS_STRING_CONVERT(config["model"].as<std::string>());
             dsVocoderConfig.model = dsVocoderConfigDir / model;
         }
 
@@ -126,5 +132,52 @@ namespace diffsinger {
             *ok = true;
         }
         return dsVocoderConfig;
+    }
+
+    DsDurConfig DsDurConfig::fromYAML(const TString &dsDurConfigPath, bool *ok) {
+        DsDurConfig dsDurConfig;
+
+        std::ifstream fileStream(dsDurConfigPath);
+        if (!fileStream.is_open()) {
+            if (ok) {
+                *ok = false;
+            }
+            return dsDurConfig;
+        }
+
+        auto dsDurConfigPathFs = std::filesystem::path(dsDurConfigPath);
+        auto dsDurConfigDir = dsDurConfigPathFs.parent_path();
+        YAML::Node config = YAML::Load(fileStream);
+        if (config["phonemes"]) {
+            auto model = DS_STRING_CONVERT(config["phonemes"].as<std::string>());
+            dsDurConfig.phonemes = dsDurConfigDir / model;
+        }
+
+        if (config["linguistic"]) {
+            auto model = DS_STRING_CONVERT(config["linguistic"].as<std::string>());
+            dsDurConfig.linguistic = dsDurConfigDir / model;
+        }
+
+        if (config["dur"]) {
+            auto model = DS_STRING_CONVERT(config["dur"].as<std::string>());
+            dsDurConfig.dur = dsDurConfigDir / model;
+        }
+
+        if (config["hop_size"]) {
+            dsDurConfig.hopSize = config["hop_size"].as<int>();
+        }
+
+        if (config["sample_rate"]) {
+            dsDurConfig.sampleRate = config["sample_rate"].as<int>();
+        }
+
+        if (config["predict_dur"]) {
+            dsDurConfig.predict_dur = config["predict_dur"].as<bool>();
+        }
+
+        if (ok) {
+            *ok = true;
+        }
+        return dsDurConfig;
     }
 }

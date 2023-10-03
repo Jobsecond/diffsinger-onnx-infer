@@ -68,6 +68,14 @@ add_executable(${PROJECT_NAME}
         Inference/AcousticInference.h
         Inference/VocoderInference.cpp
         Inference/VocoderInference.h
+        Inference/LinguisticInference.cpp
+        Inference/LinguisticInference.h
+        Inference/PitchInference.cpp
+        Inference/PitchInference.h
+        Inference/VarianceInference.cpp
+        Inference/VarianceInference.h
+        Inference/PhonemeDurInference.cpp
+        Inference/PhonemeDurInference.h
 )
 
 # Add current directory to include path

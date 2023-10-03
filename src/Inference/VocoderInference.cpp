@@ -24,7 +24,7 @@ namespace diffsinger {
                 inputNames.size(), outputNames.data(), outputNames.size());
 
         Ort::Value& waveformOutput = outputTensors[0];
-        auto waveformBuffer = waveformOutput.GetTensorMutableData<float>();
+        auto waveformBuffer = waveformOutput.GetTensorData<float>();
         std::vector<float> waveform(waveformBuffer, waveformBuffer + waveformOutput.GetTensorTypeAndShapeInfo().GetElementCount());
 
         return waveform;
