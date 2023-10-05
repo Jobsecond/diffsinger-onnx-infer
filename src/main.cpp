@@ -17,6 +17,7 @@
 #endif
 
 #include "TString.h"
+#include "PowerManagement.h"
 #include "DsProject.h"
 #include "DsConfig.h"
 #include "Preprocess.h"
@@ -115,6 +116,9 @@ namespace diffsinger {
              int shallowDiffusionDepth,
              ExecutionProvider ep,
              int deviceIndex) {
+
+        // Disable sleep mode
+        keepSystemAwake();
 
         // Get the available providers
         auto availableProviders = Ort::GetAvailableProviders();
@@ -249,6 +253,9 @@ namespace diffsinger {
         if ((audioFile.error() != SF_ERR_NO_ERROR) || (numWritten == 0)) {
             std::cout << "!! ERROR: audio write failed. Reason: " << audioFile.strError() << '\n';
         }
+
+        // Allow system sleep
+        restorePowerState();
     }
 
     ExecutionProvider parseEPFromString(const std::string &ep) {

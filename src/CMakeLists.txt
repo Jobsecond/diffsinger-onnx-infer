@@ -48,6 +48,8 @@ add_executable(${PROJECT_NAME}
         main.cpp
         TString.h
         TString.cpp
+        PowerManagement.cpp
+        PowerManagement.h
         ArrayUtil.hpp
         Preprocess.cpp
         Preprocess.h
