@@ -10,7 +10,9 @@ namespace diffsinger {
 
     enum InterpolationMethod {
         InterpolateLinear,
-        InterpolateCubicSpline
+        InterpolateCubicSpline,
+        InterpolateNearestNeighbor,
+        InterpolateNearestNeighborUp
     };
 
     /**
@@ -20,7 +22,8 @@ namespace diffsinger {
      * @param referencePoints        The reference points of the function values. (ascending, no duplicate)
      * @param referenceValues        The function values corresponding to the reference points.
      * @param interpolationMethod    The optional interpolation method.
-     *                               Can be InterpolateLinear (default) or InterpolateCubicSpline.
+     *                               Can be InterpolateLinear (default), InterpolateCubicSpline,
+     *                               InterpolateNearestNeighbor, InterpolateNearestNeighborUp.
      * @param leftFillValue          The optional fill value for elements in samplePoints
      *                               less than referencePoints[0]. Defaults to NaN.
      * @param rightFillValue         The optional fill value for elements in samplePoints
@@ -88,6 +91,11 @@ namespace diffsinger {
     template<class T>
     inline T interpolatePointCubicSpline(T x0, T y0, T x1, T y1, T x);
 
+    template<class T>
+    inline T interpolateNearestNeighbor(T x0, T y0, T x1, T y1, T x);
+
+    template<class T>
+    inline T interpolateNearestNeighborUp(T x0, T y0, T x1, T y1, T x);
 
     /* IMPLEMENTATION BELOW */
 
@@ -109,7 +117,17 @@ namespace diffsinger {
         auto d = t3 - t2;
 
         return a * y0 + b * h * (y1 - y0) + c * y1 + d * h * (y1 - y0);
-    };
+    }
+
+    template<class T>
+    T interpolateNearestNeighbor(T x0, T y0, T x1, T y1, T x) {
+        return ((x - x0) > (x1 - x)) ? y1 : y0;
+    }
+
+    template<class T>
+    T interpolateNearestNeighborUp(T x0, T y0, T x1, T y1, T x) {
+        return ((x - x0) >= (x1 - x)) ? y1 : y0;
+    }
 
     template<class T>
     std::vector<T> interpolate(
@@ -146,6 +164,12 @@ namespace diffsinger {
                             break;
                         case InterpolateCubicSpline:
                             interpolatedValue = interpolatePointCubicSpline(x0, y0, x1, y1, samplePoint);
+                            break;
+                        case InterpolateNearestNeighbor:
+                            interpolatedValue = interpolateNearestNeighbor(x0, y0, x1, y1, samplePoint);
+                            break;
+                        case InterpolateNearestNeighborUp:
+                            interpolatedValue = interpolateNearestNeighborUp(x0, y0, x1, y1, samplePoint);
                             break;
                         default:
                             interpolatedValue = interpolatePointLinear(x0, y0, x1, y1, samplePoint);

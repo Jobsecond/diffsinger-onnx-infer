@@ -24,11 +24,13 @@ namespace diffsinger {
         std::vector<int64_t> word_dur;
     };
 
-    struct LinguisticOut {
+    struct LinguisticEncodedData {
         std::vector<float> encoder_out;
 
         // x_masks should be bool vector, however vector<bool> is not a container storing bool
         std::vector<char> x_masks;
+
+        int hidden_size = 0;
 
         bool empty() const {
             return encoder_out.empty() && x_masks.empty();

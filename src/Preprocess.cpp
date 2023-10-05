@@ -128,4 +128,63 @@ namespace diffsinger {
 
         return phDurations;
     }
+
+    std::vector<int> noteMidiToDurMidi(const std::vector<int> &noteMidi, const std::vector<int> &phNum) {
+        std::vector<int> out;
+        auto newSize = std::accumulate(phNum.begin(), phNum.end(), 0);
+        out.reserve(newSize);
+        auto n = noteMidi.size();
+        if (n > phNum.size()) {
+            n = phNum.size();
+        }
+
+        for (size_t i = 0; i < n; ++i) {
+            for (int j = 0; j < phNum[i]; ++j) {
+                out.push_back(noteMidi[i]);
+            }
+        }
+        return out;
+    }
+
+    void fillZeroMidiWithNearestInPlace(std::vector<int> &src) {
+        auto not_zero = [](int x) constexpr { return x != 0; };
+        auto it = std::find(src.begin(), src.end(), 0);
+        auto it_left = std::find_if(src.begin(), it, not_zero);
+        auto it_right = std::find_if(it, src.end(), not_zero);
+
+        if (it == src.end() || it_right == src.end()) {
+            return;
+        }
+
+        // fill zero values at beginning
+        if (it_left == it) {
+            std::fill(src.begin(), it_right, *it_right);
+            it = it_right;
+        }
+
+        // middle and end
+        while (it != src.end() || it_right != src.end()) {
+            auto it_prev = it;
+            it = std::find(it_prev, src.end(), 0);
+            it_left = it - 1;
+            it_right = std::find_if(it, src.end(), not_zero);
+            if (it_right == src.end()) {
+                // end
+                std::fill(it, it_right, *it_left);
+                break;
+            }
+            // middle
+            auto dist = std::distance(it_left, it_right);
+            auto left_fills = dist / 2;
+            auto right_fills = dist - left_fills - 1;
+            std::fill(it, it + left_fills, *it_left);
+            std::fill(it_right - right_fills, it_right, *it_right);
+        }
+    }
+
+    std::vector<int> fillZeroMidiWithNearest(const std::vector<int> &src) {
+        std::vector<int> dst(src.begin(), src.end());
+        fillZeroMidiWithNearestInPlace(dst);
+        return dst;
+    }
 }

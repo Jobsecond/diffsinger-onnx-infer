@@ -5,8 +5,14 @@
 
 namespace diffsinger {
 
-    class PhonemeDurInference : public Inference {
+    struct LinguisticEncodedData;
 
+    class PhonemeDurInference : public Inference {
+    public:
+        explicit PhonemeDurInference(const TString &modelPath);
+
+        std::vector<float> infer(const LinguisticEncodedData &linguisticEncodedData,
+                                 const std::vector<int> &ph_midi);
     };
 
 } // namespace diffsinger

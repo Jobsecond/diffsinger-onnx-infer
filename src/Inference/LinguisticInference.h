@@ -8,13 +8,13 @@
 namespace diffsinger {
 
     struct LinguisticInput;
-    struct LinguisticOut;
+    struct LinguisticEncodedData;
 
     class LinguisticInference : public Inference {
     public:
         explicit LinguisticInference(const TString &modelPath);
 
-        LinguisticOut infer(const LinguisticInput &input);
+        LinguisticEncodedData infer(const LinguisticInput &input);
     };
 
 } // diffsinger

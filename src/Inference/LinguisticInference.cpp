@@ -4,7 +4,7 @@
 namespace diffsinger {
     LinguisticInference::LinguisticInference(const TString &modelPath) : Inference(modelPath) {}
 
-    LinguisticOut LinguisticInference::infer(const LinguisticInput &input) {
+    LinguisticEncodedData LinguisticInference::infer(const LinguisticInput &input) {
         if (!m_session) {
             return {};
         }
@@ -46,13 +46,15 @@ namespace diffsinger {
         Ort::Value &xMasksOutput = outputTensors[1];
         auto xMasksBuffer = xMasksOutput.GetTensorData<bool>();
 
-        LinguisticOut out;
+        LinguisticEncodedData out;
         out.encoder_out = std::vector<float>(
                 encoderOutBuffer,
                 encoderOutBuffer + encoderOutOutput.GetTensorTypeAndShapeInfo().GetElementCount());
         out.x_masks = std::vector<char>(
                 xMasksBuffer,
                 xMasksBuffer + xMasksOutput.GetTensorTypeAndShapeInfo().GetElementCount());
+        auto encoderOutShape = encoderOutOutput.GetTensorTypeAndShapeInfo().GetShape();
+        out.hidden_size = encoderOutShape[encoderOutShape.size() - 1];
         return out;
     }
 
