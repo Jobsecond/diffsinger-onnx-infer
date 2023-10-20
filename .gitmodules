@@ -1,0 +1,3 @@
+[submodule "syscmdline"]
+	path = libs/syscmdline
+	url = ../../SineStriker/syscmdline.git

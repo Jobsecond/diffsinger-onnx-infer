@@ -8,13 +8,10 @@
 
 #include <onnxruntime_cxx_api.h>
 
-#include <argparse/argparse.hpp>
-
 #include <sndfile.hh>
 
-#ifdef _WIN32
-#include <Windows.h>
-#endif
+#include <syscmdline/parser.h>
+#include <syscmdline/system.h>
 
 #include "TString.h"
 #include "PowerManagement.h"
@@ -25,6 +22,11 @@
 #include "Inference/AcousticInference.h"
 #include "Inference/VocoderInference.h"
 
+#ifdef _WIN32
+#define TO_TSTR(x) SysCmdLine::utf8ToWide(x)
+#else
+#define TO_TSTR(x) (x)
+#endif
 
 namespace diffsinger {
     void run(const TString &dsFilePath,
@@ -41,70 +43,113 @@ namespace diffsinger {
     std::string millisecondsToSecondsString(long long milliseconds);
 }
 
-#ifdef _WIN32
-using diffsinger::MBStringToWString;
-#endif
+int routine(const SysCmdLine::ParseResult &result);
 
 int main(int argc, char *argv[]) {
 
-    argparse::ArgumentParser program("DiffSinger");
-    program.add_argument("--ds-file").required().help("Path to .ds file");
-    program.add_argument("--acoustic-config").required().help("Path to acoustic dsconfig.yaml");
-    program.add_argument("--vocoder-config").required().help("Path to vocoder.yaml");
-    program.add_argument("--spk").default_value(std::string())
-            .help(R"(Speaker Mixture (e.g. "name" or "name1|name2" or "name1:0.25|name2:0.75"))");
-    program.add_argument("--out").required().help("Output Audio Filename (*.wav)");
-    program.add_argument("--speedup").scan<'i', int>().default_value(10).help("PNDM speedup ratio");
-    program.add_argument("--depth").scan<'i', int>().default_value(1000).help("Shallow diffusion depth (needs acoustic model support)");
-    program.add_argument("--ep").default_value("cpu").help(
-            "Execution Provider for audio inference. Supported: cpu (CPUExecutionProvider)"
+    using SysCmdLine::Option;
+    using SysCmdLine::Argument;
+    using SysCmdLine::Command;
+    using SysCmdLine::CommandCatalogue;
+    using SysCmdLine::Parser;
+
+    Option dsFileOption("--ds-file", "Path to .ds file");
+    dsFileOption.addArgument(Argument("file"));
+    dsFileOption.setRequired(true);
+
+    Option acousticConfigOption("--acoustic-config", "Path to acoustic dsconfig.yaml");
+    acousticConfigOption.addArgument(Argument("file"));
+    acousticConfigOption.setRequired(true);
+
+    Option vocoderConfigOption("--vocoder-config", "Path to vocoder.yaml");
+    vocoderConfigOption.addArgument(Argument("file"));
+    vocoderConfigOption.setRequired(true);
+
+    Option spkOption(
+            "--spk", R"(Speaker Mixture (e.g. "name" or "name1|name2" or "name1:0.25|name2:0.75"))");
+    spkOption.addArgument(Argument("spk"));
+
+    Option outOption("--out", "Output Audio Filename (*.wav)");
+    outOption.addArgument(Argument("file"));
+    outOption.setRequired(true);
+
+    Option speedUpOption("--speedup", "PNDM speedup ratio");
+    speedUpOption.addArgument(Argument("rate", {}, 10));
+
+    Option depthOption("--depth", "Shallow diffusion depth (needs acoustic model support)");
+    depthOption.addArgument(Argument("depth", {}, 1000));
+    depthOption.setShortMatchRule(Option::ShortMatchAll);
+
+    Option epOption("--ep",
+        "Execution Provider for audio inference.\nSupported: cpu (CPUExecutionProvider)"
 #ifdef ONNXRUNTIME_ENABLE_CUDA
-            ", cuda (CUDAExecutionProvider)"
+        ", cuda (CUDAExecutionProvider)"
 #endif
 #ifdef ONNXRUNTIME_ENABLE_DML
-            ", directml, dml (DmlExecutionProvider)"
+        ", directml, dml (DmlExecutionProvider)"
 #endif
-            );
-    program.add_argument("--device-index").scan<'i', int>().default_value(0).help("GPU device index");
+    );
+    epOption.addArgument(Argument("ep", {}, "cpu"));
 
-    try {
-        program.parse_args(argc, argv);
-    } catch (const std::runtime_error& err) {
-        std::cerr << err.what() << std::endl;
-        std::cerr << program;
-        std::exit(1);
-    }
+    Option deviceIndexOption("--device-index", "GPU device index");
+    deviceIndexOption.addArgument(Argument("index", {}, 0));
 
-    auto dsPath = program.get("--ds-file");
-    auto dsConfigPath = program.get("--acoustic-config");
-    auto vocoderConfigPath = program.get("--vocoder-config");
-    auto spkMixStr = program.get("--spk");
-    auto outputAudioTitle = program.get("--out");
-    auto speedup = program.get<int>("--speedup");
-    auto depth = program.get<int>("--depth");
-    auto ep = program.get("--ep");
-    auto deviceIndex = program.get<int>("--device-index");
+    Command rootCommand("DiffSinger");
+    rootCommand.setOptions({
+                                   dsFileOption,
+                                   acousticConfigOption,
+                                   vocoderConfigOption,
+                                   spkOption,
+                                   outOption,
+                                   speedUpOption,
+                                   depthOption,
+                                   epOption,
+                                   deviceIndexOption,
+                           });
+
+    rootCommand.addVersionOption("0.0.0.1");
+    rootCommand.addHelpOption(true);
+    rootCommand.setHandler(routine);
+
+    CommandCatalogue cc;
+    cc.addOptionCategory("Required Options", {
+            "--ds-file",
+            "--acoustic-config",
+            "--vocoder-config",
+            "--out",
+    });
+    rootCommand.setCatalogue(cc);
+
+    Parser parser(rootCommand);
+    // parser.setShowHelpOnError(false);
+    return parser.invoke(SysCmdLine::commandLineArguments());
+}
+
+int routine(const SysCmdLine::ParseResult &result) {
+    auto dsPath = result.valueForOption("--ds-file").toString();
+    auto dsConfigPath = result.valueForOption("--acoustic-config").toString();
+    auto vocoderConfigPath = result.valueForOption("--vocoder-config").toString();
+    auto spkMixStr = result.valueForOption("--spk").toString();
+    auto outputAudioTitle = result.valueForOption("--out").toString();
+    auto speedup = result.valueForOption("--speedup").toInt();
+    auto depth = result.valueForOption("--depth").toInt();
+    auto ep = result.valueForOption("--ep").toString();
+    auto deviceIndex = result.valueForOption("--device-index").toInt();
 
     auto epEnum = diffsinger::parseEPFromString(ep);
 
-#ifdef _WIN32
-    auto currentCodePage = ::GetACP();
-    diffsinger::run(MBStringToWString(dsPath, currentCodePage),
-                    MBStringToWString(dsConfigPath, currentCodePage),
-                    MBStringToWString(vocoderConfigPath, currentCodePage),
-                    MBStringToWString(outputAudioTitle, currentCodePage),
+    diffsinger::run(TO_TSTR(dsPath),
+                    TO_TSTR(dsConfigPath),
+                    TO_TSTR(vocoderConfigPath),
+                    TO_TSTR(outputAudioTitle),
                     spkMixStr,
                     speedup,
                     depth,
                     epEnum,
                     deviceIndex);
-#else
-    diffsinger::run(dsPath, dsConfigPath, vocoderConfigPath, outputAudioTitle, spkMixStr, speedup, depth, epEnum, deviceIndex);
-#endif
 
     return 0;
 }
-
 
 namespace diffsinger {
     void run(const TString &dsFilePath,

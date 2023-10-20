@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 option(ENABLE_DML "Enable DirectML support" off)
 option(ENABLE_CUDA "Enable CUDA support" off)
+option(BUILD_LIBRARIES_IN_PLACE "Build libraries in-place" on)
 
 if(ENABLE_DML)
     message("-- ONNX Runtime DirectML is enabled")
@@ -93,8 +94,17 @@ target_link_libraries(${PROJECT_NAME} PRIVATE rapidjson)
 find_package(yaml-cpp CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE yaml-cpp)
 
-find_package(argparse CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE argparse::argparse)
+if(BUILD_LIBRARIES_IN_PLACE)
+    set(EXTERNAL_BUILD_MAIN_DIR ${CMAKE_BINARY_DIR}/out-Libraries)
+    add_subdirectory(../libs ../libs)
+endif()
+
+if(BUILD_LIBRARIES_IN_PLACE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE syscmdline)
+else()
+    find_package(syscmdline REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PRIVATE syscmdline::syscmdline)
+endif()
 
 # ONNX Runtime libraries
 

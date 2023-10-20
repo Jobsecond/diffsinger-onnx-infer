@@ -21,7 +21,7 @@
     - MIT License
   - [libsndfile](https://github.com/libsndfile/libsndfile)
     - GNU LGPL v2.1 or later
-  - [argparse](https://github.com/p-ranav/argparse)
+  - [syscmdline](https://github.com/SineStriker/syscmdline)
     - MIT License
 
 ### Steps
@@ -87,7 +87,7 @@ You will need to specify **include path** and **lib path** for each library in s
 git clone https://github.com/microsoft/vcpkg
 cd vcpkg
 .\bootstrap-vcpkg.bat
-.\vcpkg install --triplet=x64-windows "libsndfile[core]" rapidjson yaml-cpp argparse
+.\vcpkg install --triplet=x64-windows "libsndfile[core]" rapidjson yaml-cpp
 ```
 
 ##### Linux and macOS
@@ -96,7 +96,7 @@ cd vcpkg
 git clone https://github.com/microsoft/vcpkg
 cd vcpkg
 ./bootstrap-vcpkg.sh
-./vcpkg install --triplet=<TRIPLET> "libsndfile[core]" rapidjson yaml-cpp argparse
+./vcpkg install --triplet=<TRIPLET> "libsndfile[core]" rapidjson yaml-cpp
 ```
 
 Replace `<TRIPLET>` with your platform triplet. For Linux, it is usually `x64-linux`, and for macOS, it can be `arm64-osx` (Apple Silicon) or `x64-osx` (Intel).
