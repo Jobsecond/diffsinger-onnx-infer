@@ -5,24 +5,23 @@
 ## Command Line Options
 
 ```
-Usage: ds_onnx_infer [-h] --ds-file VAR --acoustic-config VAR --vocoder-config VAR
-       [--spk VAR] --out VAR [--speedup VAR] [--depth VAR]
-       [--ep VAR] [--device-index VAR]
+Usage:
+    ds_onnx_infer --ds-file <file> --acoustic-config <file> --vocoder-config <file> --out <file> [options]
 
-Optional arguments:
-  -h, --help            shows help message and exits
-  -v, --version         prints version information and exits
-  --ds-file             Path to .ds file [required]
-  --acoustic-config     Path to acoustic dsconfig.yaml [required]
-  --vocoder-config      Path to vocoder.yaml [required]
-  --spk                 Speaker Mixture (e.g. "name" or "name1|name2" or "name1:0.25|name2:0.75")
-                        [default: ""]
-  --out                 Output Audio Filename (*.wav) [required]
-  --speedup             PNDM speedup ratio [default: 10]
-  --depth               Shallow diffusion depth (needs acoustic model support) [default: 1000]
-  --ep                  Execution Provider for audio inference. (cpu/directml/cuda)
-                        [default: "cpu"]
-  --device-index        GPU device index [default: 0]
+Required Options:
+    --ds-file <file>            Path to .ds file
+    --acoustic-config <file>    Path to acoustic dsconfig.yaml
+    --vocoder-config <file>     Path to vocoder.yaml
+    --out <file>                Output Audio Filename (*.wav)
+
+Options:
+    --spk <spk>               Speaker Mixture (e.g. "name" or "name1|name2" or "name1:0.25|name2:0.75")
+    --speedup <rate>          PNDM speedup ratio [default: 10]
+    --depth <depth>           Shallow diffusion depth (needs acoustic model support) [default: 1000]
+    --ep <ep>                 Execution Provider for audio inference. (cpu/directml/cuda) [default: "cpu"]
+    --device-index <index>    GPU device index [default: "cpu"]
+    -v, --version             Show version information
+    -h, --help                Show help information
 ```
 
 ## Build instructions
