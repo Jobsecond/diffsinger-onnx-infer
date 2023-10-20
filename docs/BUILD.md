@@ -4,15 +4,25 @@
 
 - Toolchains
   - A compiler that supports C++17
-  - CMake
-  - vcpkg
-  - NuGet (optional)
+    - MSVC 2019 or later
+    - GCC
+    - Clang
+  - [CMake](https://cmake.org/)
+  - [vcpkg](https://github.com/microsoft/vcpkg)
+  - [NuGet](https://www.nuget.org/) (optional)
 - Third-party libraries:
-  - ONNX Runtime
-  - yaml-cpp
-  - rapidjson
-  - libsndfile
-  - argparse
+  - [ONNX Runtime](https://onnxruntime.ai/)
+    - MIT License
+  - [DirectML](https://github.com/microsoft/DirectML)
+    - MIT License
+  - [yaml-cpp](https://github.com/jbeder/yaml-cpp)
+    - MIT License
+  - [rapidjson](https://github.com/Tencent/rapidjson)
+    - MIT License
+  - [libsndfile](https://github.com/libsndfile/libsndfile)
+    - GNU LGPL v2.1 or later
+  - [argparse](https://github.com/p-ranav/argparse)
+    - MIT License
 
 ### Steps
 
